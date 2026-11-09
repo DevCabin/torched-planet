@@ -5,9 +5,8 @@ survives an interrupted session.
 
 ## Context
 
-The game was built as **Blastline**. It is being renamed to **Torched Planet** — an
-homage to *Scorched Earth*. The local project folder has already been renamed from
-`torched-earth` to `torched-planet` by the project lead.
+The game was built as **Blastline**. It is now **Torched Planet** — an homage to
+*Scorched Earth*. The local project folder is `torched-planet`.
 
 The GitHub repository `DevCabin/torched-planet` already exists: public, described as
 "homage to Scorched Earth", with **zero commits** (completely empty). No new repo needs
