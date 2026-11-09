@@ -90,7 +90,8 @@ All of this is module scope in `game.js`. There is no class, no store, no observ
 | `shells` | `Shell[]` | Shells in flight; empty means no shot is airborne |
 | `effects` | `{x,y,radius,color,age}[]` | Explosion rings, self-expiring at `.58 s` |
 | `burns` | `{x,age,delay,spent}[]` | Napalm pools waiting to detonate |
-| `round` | `number` | **Doubles as the level counter.** Starts at 1; only `reset()` returns it |
+| `round` | `number` | Turn-cycle counter: `+1` after each completed cycle and on every duel end |
+| `level` | `number` | **Duel counter.** Advances only when a tank is destroyed; drives all scaling |
 | `active` | `0 \| 1` | Whose shot is in progress |
 | `phase` | `'shop' \| 'aim' \| 'bot' \| 'flight' \| 'over'` | See §5 |
 | `report` | `{earned, hits, shields, near, falls, initialY}` | Per-shot tally, rebuilt by `fire()` |
@@ -133,21 +134,22 @@ Two subtleties that confuse newcomers:
 
 ## 5. The state machine
 
-Five phases. Every transition is explicit and greppable.
+Four phases. Every transition is explicit and greppable.
 
 ```
- reset()
-   └─▶ openShop() ──▶ SHOP ──deploy()──▶ AIM ──fire()──▶ FLIGHT
-                                                          │
-                                                     finishShot()
-                                                          │
-            ┌─────────────────────────────────────────────┼──────────────────────┐
-            │                                             │                      │
-      CPU tank dead                               nobody dead              player dead
-            │                                             │                      │
-      nextWave() ──▶ SHOP                    BOT ──aimBot()──▶ FLIGHT           OVER
-                                                  │                                │
-                                             finishShot() ──▶ SHOP            reset() only
+ reset() ─▶ openShop() ─▶ SHOP ─deploy()─▶ AIM ─fire()─▶ FLIGHT ─finishShot()
+                                                              │
+      ┌───────────────────────────────────────────────────────┴──────────────────────────────┐
+      │                                                                                      │
+ a tank was destroyed                                                              both still alive
+      │                                                                                      │
+ nextLevel():                                                        ┌─────────────────────┴─────┐
+   level++  (the next round is the next level)               you fired                       CPU fired
+   round++                                                                  │                     │
+   fresh tanks, bank kept                                                   ▼                     ▼
+      │                                                          BOT ─aimBot()─▶ FLIGHT      round++ ─▶ SHOP
+      ▼                                                                     │
+    SHOP ◀───────────────────────────── finishShot() ◀──────────────────────┘
 ```
 
 | Phase | Entered by | What `update()` does | Exit |
@@ -156,7 +158,11 @@ Five phases. Every transition is explicit and greppable.
 | `aim` | `deploy()` | samples input, adjusts angle/power/fuel | `fire()` (button or Space) |
 | `bot` | `finishShot()` after your shot | counts down `botDelay`, may reposition, then `aimBot()` | `aimBot()` → `fire()` |
 | `flight` | `fire()` | integrates shells, burns, explosions, settling | `finishShot()` |
-| `over` | `finishShot()` when you are destroyed | nothing | `reset()` (New battlefield) |
+
+**Levels are duels, not turns.** `round` increments every completed turn cycle — that alone
+never changes the level. Only a destroyed tank (yours or the CPU's) calls `nextLevel()`,
+which bumps `level` and starts the next round at the higher level. Both tanks come back
+fresh; your bank and ammo survive. There is no game-over state.
 
 Guards you must not break:
 
@@ -232,8 +238,10 @@ Collision (`collision()`) is deliberately generous in three ways:
 | `abs(dx) <= 17 && -7 <= dy <= 11` | box | The hull |
 | `hypot(dx, dy + 4) <= 9` | circle | The track run |
 
-`dx`/`dy` are measured from `(tank.x, tank.y - 12)`. The shooter is immune for its first
-16 ticks, so a shell cannot detonate on its own barrel.
+`dx`/`dy` are measured from `(tank.x, tank.y - 12)`. `collision()` skips the shooter
+entirely, so a shell can never detonate on your own hull — at minimum power a slow shell
+would otherwise never clear the 24 px radius. Splash from your own impact can still cost you
+shield HP, because `blast()` is applied to both tanks.
 
 ---
 
@@ -342,10 +350,11 @@ feel. The HUD shows the live multiplier (`updateHud()` writes `#multiplier`).
 The catalog DOM is built **once** at load from `catalog`; `updateShop()` keeps the displayed
 prices in sync each level. Add an item to the data and it appears automatically.
 
-**Level flow** lives in `nextWave()`: `round++`, pay `waveBonus`, refill the player's fuel,
-regenerate the map, reposition the player to x=115, build a fresh CPU with scaled shield and
-cash, clear shells and burns, then reopen the shop. Player ammo and remaining shield HP carry
-over on purpose; the run ends only when the **player** is destroyed.
+**Level flow** lives in `nextLevel()`, called from `finishShot()` when either tank is gone:
+`round++`, `level++`, pay `waveBonus` **only if you won the duel**, revive and refuel your
+tank, regenerate the map, reposition you to x=115, build a fresh CPU with scaled shield and
+cash, clear shells and burns, then reopen the shop. Ammo and bank carry over. Because the
+level advances on *any* destruction, losing a duel costs you the bonus but not the run.
 
 ---
 
@@ -461,9 +470,9 @@ each:
 | `power-tick` | `updateHud()` | Last-shot reference tick (`--at` custom property) |
 | `cash` | `updateHud()` | The bank |
 | `multiplier` | `updateHud()` | `1.0× REWARDS` |
-| `turn` | `updateHud()` | `LEVEL nn` |
+| `turn` | `updateHud()` | `LEVEL nn · ROUND nn` |
 | `enemy` | `updateHud()` | CPU shield status |
-| `map` | `reset()`, `nextWave()` | Map name |
+| `map` | `reset()`, `nextLevel()` | Map name |
 | `status` | `setStatus()` | The one-line narration |
 | `fire`, `weapon` | `updateHud()` | Disabled unless `phase === 'aim'` |
 | `weapon` options | `updateWeapons()` | Rebuilt after any ammo change |
@@ -569,8 +578,8 @@ There is no storage layer today. The smallest honest version: read `localStorage
 - **No audio.**
 - **Napalm splash never carves** (`carve = false`), so fires burn on top of terrain.
 - **The heightmap cannot represent caves**; blasts only carve when they span the surface.
-- **`round` is overloaded** — it is both turn counter and level. Splitting "rounds within a
-  level" out would need a second variable.
+- **No game-over state** — a destroyed tank ends the duel, not the run. `level` always rises.
+- **`waveBonus` only pays on a win**, so losing a duel advances the level without income.
 
 ---
 
@@ -579,8 +588,9 @@ There is no storage layer today. The smallest honest version: read `localStorage
 | Term | Meaning |
 | --- | --- |
 | **Bank** | `tank.cash` — score and spending money are the same number |
-| **Level / round** | The same counter (`round`); increments after each completed cycle |
-| **Wave** | A level transition: CPU destroyed, new target deployed (`nextWave()`) |
+| **Round** | Turn-cycle counter (`round`); increments after each full player + CPU cycle |
+| **Level** | Duel counter (`level`); increments only when a tank is destroyed |
+| **Duel** | One level's battle; ends in destruction, then `nextLevel()` starts the next |
 | **Support** | Highest ground under the tank's footprint (`support()`), vs raw surface (`ground()`) |
 | **Carve** | Lowering `terrain[col]` to create a crater |
 | **Direct** | The tank object a shell actually struck (`blast(x, y, weapon, direct)`) |

@@ -30,7 +30,8 @@ const catalog = [
   ]],
   ['Utilities', [{ id: 'fuel', name: 'Fuel can', price: 35, detail: '+45 fuel · max 100' }]]
 ];
-// Endless progression: `round` doubles as the level counter and never stops climbing.
+// Endless progression: `level` counts duels (advances when a tank is destroyed),
+// `round` counts turn cycles. All difficulty and reward scaling uses `level`.
 const progression = {
   reward: level => 1 + .3 * (level - 1),
   price: level => 1 + .2 * (level - 1),
@@ -59,7 +60,7 @@ function clearControls() {
   joystick.style.setProperty('--stick-x', '0px');
   joystick.style.setProperty('--stick-y', '0px');
 }
-let terrain, map, round, tanks, active, phase, shells, effects, burns, settling, botDelay, report, status, palette;
+let terrain, map, round, level, tanks, active, phase, shells, effects, burns, settling, botDelay, report, status, palette;
 let last = 0;
 let previousSummary = '';
 let accumulator = 0;
@@ -71,9 +72,9 @@ let lastPower = null;
 function makeMap() {
   map = ['Salt Flats', 'Iron Hills', 'Rooftop District'][Math.floor(Math.random() * 3)];
   const offset = Math.random() * 6.28;
-  const level = round || 1;
-  const swell = 1 + Math.min(.5, (level - 1) * .06);
-  const buildings = Array.from({ length: 12 }, () => 235 + Math.random() * (160 + Math.min(70, (level - 1) * 12)));
+  const levelNow = level || 1;
+  const swell = 1 + Math.min(.5, (levelNow - 1) * .06);
+  const buildings = Array.from({ length: 12 }, () => 235 + Math.random() * (160 + Math.min(70, (levelNow - 1) * 12)));
   palette = {
     'Salt Flats': ['#192c34', '#497079', '#536052', '#b3b691'],
     'Iron Hills': ['#242c3d', '#6a6467', '#525d55', '#a4b693'],
@@ -115,8 +116,8 @@ function updateHud() {
     byId(id + '-meter').value = value;
   }
   byId('cash').textContent = '$' + player.cash;
-  byId('turn').textContent = 'LEVEL ' + String(round).padStart(2, '0');
-  byId('multiplier').textContent = progression.reward(round).toFixed(1) + '× REWARDS';
+  byId('turn').textContent = 'LEVEL ' + String(level).padStart(2, '0') + ' · ROUND ' + String(round).padStart(2, '0');
+  byId('multiplier').textContent = progression.reward(level).toFixed(1) + '× REWARDS';
   byId('power-tick').style.setProperty('--at', (lastPower === null ? 0 : clamp(lastPower, 0, 100)) + '%');
   byId('enemy').textContent = !tanks[1].alive ? 'CPU / DOWN' : 'CPU / ' + (tanks[1].hp ? tanks[1].hp + ' HP' : 'NO SHIELD');
   byId('fire').disabled = phase !== 'aim';
@@ -134,7 +135,7 @@ function updateWeapons() {
   weaponSelect.value = selected;
 }
 
-const priceOf = item => Math.round(item.price * progression.price(round));
+const priceOf = item => Math.round(item.price * progression.price(level));
 
 function canBuy(tank, item) {
   return tank.cash >= priceOf(item) && (!item.hp || tank.hp < item.hp) && (item.id !== 'fuel' || tank.fuel < 100);
@@ -190,8 +191,8 @@ function openShop(message) {
   phase = 'shop';
   tanks[0].travel = 0;
   setStatus(message);
-  byId('shop-turn').textContent = 'LEVEL ' + String(round).padStart(2, '0') + ' · SUPPLY DEPOT';
-  byId('shop-note').textContent = round === 1 ? 'Select supplies or head straight to the field.' : message;
+  byId('shop-turn').textContent = 'LEVEL ' + String(level).padStart(2, '0') + ' · SUPPLY DEPOT';
+  byId('shop-note').textContent = level === 1 && round === 1 ? 'Select supplies or head straight to the field.' : message;
   updateShop();
   updateWeapons();
   updateHud();
@@ -210,10 +211,11 @@ function deploy() {
 function reset() {
   if (shop.open) shop.close();
   round = 1;
+  level = 1;
   makeMap();
   tanks = [makeTank(115, '#d5fa71', 53), makeTank(875, '#ff927a', 127)];
-  tanks[1].cash = progression.cpuCash(round);
-  tanks[1].hp = progression.cpuShield(round);
+  tanks[1].cash = progression.cpuCash(level);
+  tanks[1].hp = progression.cpuShield(level);
   previousSummary = '';
   lastPower = null;
   shells = [];
@@ -262,9 +264,9 @@ function fire(id) {
   setStatus((active ? 'CPU' : 'You') + ' fired ' + weapons[id].name + '.');
 }
 
-function collision(x, y, shooter, ticks) {
+function collision(x, y, shooter) {
   for (const tank of tanks) {
-    if (!tank.alive || (tank === shooter && ticks < 16)) continue;
+    if (!tank.alive || tank === shooter) continue;
     const dx = x - tank.x;
     const dy = y - (tank.y - 12);
     if (tank.hp > 0 && Math.hypot(dx, dy) <= 24) return tank;
@@ -280,11 +282,11 @@ function advance(shell, shooter, step) {
   shell.y += shell.vy * step;
   shell.ticks++;
   if (shell.x < 0 || shell.x >= W || shell.y > H || shell.ticks > 1400) return 'out';
-  return collision(shell.x, shell.y, shooter, shell.ticks);
+  return collision(shell.x, shell.y, shooter);
 }
 
 function reward(amount, kind) {
-  const scaled = Math.round(amount * progression.reward(round));
+  const scaled = Math.round(amount * progression.reward(level));
   report.earned += scaled;
   report[kind]++;
   tanks[active].cash += scaled;
@@ -349,15 +351,8 @@ function finishShot() {
   if (report.near) tags.push('near miss ×' + report.near);
   if (report.falls) tags.push('fall bonus');
   const summary = (active ? 'CPU' : 'You') + (report.earned ? ' earned $' + report.earned + ' (' + tags.join(', ') + ').' : ' earned $0.');
-  if (!tanks[0].alive) {
-    phase = 'over';
-    const outcome = tanks[1].alive ? 'CPU wins.' : 'Draw.';
-    setStatus(outcome + ' You reached LEVEL ' + String(round).padStart(2, '0') + ' with $' + tanks[0].cash + ' banked. ' + summary + ' Choose New battlefield to start a new run.');
-    updateHud();
-    return;
-  }
-  if (!tanks[1].alive) {
-    nextWave(summary);
+  if (!tanks[0].alive || !tanks[1].alive) {
+    nextLevel(summary);
     return;
   }
   if (active === 0) {
@@ -375,31 +370,36 @@ function finishShot() {
   }
 }
 
-function nextWave(summary) {
+function nextLevel(summary) {
+  const won = tanks[0].alive && !tanks[1].alive;
+  const outcome = won ? 'You win the duel!' : tanks[0].alive ? 'Draw.' : tanks[1].alive ? 'CPU wins the duel.' : 'Draw.';
   round++;
-  const bonus = progression.waveBonus(round);
+  level++;
+  const bonus = won ? progression.waveBonus(level) : 0;
   tanks[0].cash += bonus;
+  tanks[0].alive = true;
+  tanks[0].hp = 0;
   tanks[0].fuel = 100;
   tanks[0].travel = 0;
+  tanks[0].vy = 0;
   makeMap();
   tanks[0].x = 115;
   tanks[0].y = support(115);
-  tanks[0].vy = 0;
   tanks[1] = makeTank(875, '#ff927a', 127);
-  tanks[1].hp = progression.cpuShield(round);
-  tanks[1].cash = progression.cpuCash(round);
+  tanks[1].hp = progression.cpuShield(level);
+  tanks[1].cash = progression.cpuCash(level);
   shells = [];
   burns = [];
   settling = 0;
   byId('map').textContent = map.toUpperCase();
-  previousSummary = summary + ' Level ' + round + ' bonus +$' + bonus + '.';
-  openShop('Target destroyed. Level ' + round + ' — bank bonus +$' + bonus + '.');
+  previousSummary = outcome + ' ' + summary + (bonus ? ' Level ' + level + ' bonus +$' + bonus + '.' : '');
+  openShop('LEVEL ' + level + ' — ' + outcome + (bonus ? ' Bank bonus +$' + bonus + '.' : ''));
 }
 
 function aimTarget(player) {
-  const offset = Math.random() < progression.flub(round)
+  const offset = Math.random() < progression.flub(level)
     ? (150 + Math.random() * 140) * (Math.random() < .5 ? -1 : 1)
-    : (Math.random() - .5) * progression.spread(round);
+    : (Math.random() - .5) * progression.spread(level);
   return clamp(player.x + offset, 24, W - 24);
 }
 
@@ -413,7 +413,7 @@ function aimBot() {
     const special = catalog[0][1].find(item => canBuy(bot, item));
     if (special) purchase(bot, special);
   }
-  const id = round < 3 ? 'basic' : ['nuke', 'large', 'napalm', 'spread', 'basic'].find(key => bot.ammo[key]);
+  const id = level < 3 ? 'basic' : ['nuke', 'large', 'napalm', 'spread', 'basic'].find(key => bot.ammo[key]);
   const target = aimTarget(player);
   let best = { score: Infinity, angle: 130, power: 65 };
   for (let elevation = 25; elevation <= 75; elevation += 5) {
