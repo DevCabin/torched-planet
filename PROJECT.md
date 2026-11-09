@@ -5,8 +5,8 @@
 > AI working protocol in `cline_instructions.md`. If you read only one file to get up to
 > speed, read this one.
 >
-> Last consolidated: 2026-11-09. **If any of those six superseded files are still on disk,
-> delete them** — see §1.
+> Last consolidated: 2026-11-09. **The consolidation is complete** — the eight superseded
+> documents have been removed from the tree, and §1 records what went and where it landed.
 
 ---
 
@@ -41,7 +41,7 @@ is the broken part.
 | --- | --- |
 | Repo | `github.com/DevCabin/torched-planet` (public), branch `main` |
 | Stack | vanilla JS + canvas. No dependencies, no build step, no assets |
-| Size | `game.js` ≈750 lines · `index.html` ≈51 · `style.css` ≈73 |
+| Size | `game.js` 756 lines · `index.html` 54 · `style.css` 101 |
 | Live URL | **none yet** — the Vercel deploy is the last unfinished launch step (§21) |
 | Play locally | `open index.html` — that is a complete dev environment |
 
@@ -61,21 +61,38 @@ python3 -m http.server 8000      # from the project folder, then http://localhos
 **A blank page is a script error, not a hosting problem.** Open DevTools; the console names the
 line. Then hard-refresh (`Cmd+Shift+R`), because `game.js` caches aggressively.
 
-### Superseded files to delete
+### Superseded files — retired
 
-Consolidating the docs left six files behind. Each carries a `SUPERSEDED` banner at the top and
-nothing else needs salvaging from them:
+Consolidating the docs left eight files behind: the two handoff/architecture documents, the four
+early `PLAN-*.md` files, and the two plans written for the gauge/wind-and-mobile work of the last
+session. Every one of them carried a `SUPERSEDED` banner naming the `PROJECT.md` section that
+absorbed it, and nothing else needed salvaging:
 
 ```bash
 cd /Users/george/GITHUB/torched-planet
 git rm HANDOFF.md DEVELOPERS.md PLAN-torched-planet-launch.md \
        PLAN-progression.md PLAN-settling-open-questions.md \
-       PLAN-enemy-gauge-and-wind.md
+       PLAN-enemy-gauge-and-wind.md PLAN-mobile.md PLAN-weapons.md
 ```
 
-After that the repo root holds exactly: `README.md`, `PROJECT.md`, `CHANGELOG.md`,
+Where each went:
+
+| Removed | Absorbed into |
+| --- | --- |
+| `HANDOFF.md` | §0 folder trap, §1 status, §2 verify, §21 roadmap, §20 traps |
+| `DEVELOPERS.md` | §3–§17 — architecture, state, phases, physics, CPU, HUD, recipes |
+| `PLAN-torched-planet-launch.md` | §18 decision log, §21 launch roadmap |
+| `PLAN-progression.md` | §11 economy, §18 decision log |
+| `PLAN-settling-open-questions.md` | §18 decision log |
+| `PLAN-enemy-gauge-and-wind.md` | §8 wind, §14 rendering, §15 gauge, §18 |
+| `PLAN-mobile.md` | §15 "Mobile and the layout contract" |
+| `PLAN-weapons.md` | §10 weapon table, §11 catalogue ordering, §17 recipes |
+
+The repo root now holds exactly: `README.md`, `PROJECT.md`, `CHANGELOG.md`,
 `cline_instructions.md`, `index.html`, `style.css`, `game.js`, `vercel.json`, plus
-`tools/` and `.gitignore`. Git history keeps the old files if you ever want them back.
+`tools/` and `.gitignore`. Git history keeps the old files if you ever want them back — and a
+new multi-step task still gets a fresh `PLAN-*.md` before implementation (rule 2). Retire it once
+its decisions are folded into this document and the `CHANGELOG`.
 
 ---
 

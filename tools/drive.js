@@ -1,6 +1,6 @@
 // tools/drive.js — headless smoke test for Torched Planet.
 //
-// Loaded AFTER game.js by a generated harness (see HANDOFF.md §6). It drives the
+// Loaded AFTER game.js by a generated harness (see PROJECT.md §2). It drives the
 // real game loop by calling update() directly, because requestAnimationFrame does
 // not advance reliably under Chrome's --virtual-time-budget.
 //
