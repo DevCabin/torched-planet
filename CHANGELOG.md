@@ -11,6 +11,10 @@ All notable changes to this project are recorded here.
 - Terrain amplitude and rooftop heights swell with level.
 - `DEVELOPERS.md`: a full technical architecture reference for new contributors — state model, phase machine, ballistics, terrain carving, economy, CPU search, input plumbing, DOM contract, house rules, six recipes, known limitations and a glossary.
 
+### Fixed
+
+- Startup crash introduced with endless progression: `reset()` built the tanks before `makeMap()`, so `makeTank()` → `support()` read an undefined `terrain` and the game never booted. The map is now generated before any tank exists.
+
 ### Changed
 
 - Power aim is no longer twitchy: the rate dropped from a fixed 48 points/second to a 5.6 → 16 points/second ramp over the first 0.65 s of a hold.

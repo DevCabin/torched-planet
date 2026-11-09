@@ -207,10 +207,10 @@ function deploy() {
 function reset() {
   if (shop.open) shop.close();
   round = 1;
+  makeMap();
   tanks = [makeTank(115, '#d5fa71', 53), makeTank(875, '#ff927a', 127)];
   tanks[1].cash = progression.cpuCash(round);
   tanks[1].hp = progression.cpuShield(round);
-  makeMap();
   previousSummary = '';
   lastPower = null;
   shells = [];
