@@ -9,12 +9,11 @@ First public deployment: **https://torched-planet.vercel.app**. Everything below
 ### Added
 
 - **Live deployment** on Vercel — a static build of the repo root from `vercel.json` (no build step, no output directory). The GitHub repository is connected, so pushes to `main` redeploy automatically.
-- `HANDOFF.md`: session handoff — folder checklist, locked decisions, open questions, ordered next steps, verification recipe and known traps.
 - `tools/drive.js`: a headless smoke test driver that steps `update()` directly, so behaviour can be verified in a real browser without `requestAnimationFrame`.
 - Endless progression: the level counter never stops climbing, destroying the CPU deploys a new target with a `$250 × level` bank bonus, and shot rewards scale 30% per level against 20% price scaling.
 - Shift fine aim, single-keypress 1% power nudges, and a last-shot reference tick on the power meter.
 - Terrain amplitude and rooftop heights swell with level.
-- `DEVELOPERS.md`: a full technical architecture reference for new contributors — state model, phase machine, ballistics, terrain carving, economy, CPU search, input plumbing, DOM contract, house rules, six recipes, known limitations and a glossary.
+- `PROJECT.md`: a full technical reference for new contributors — state model, phase machine, ballistics, terrain carving, economy, CPU search, input plumbing, DOM contract, house rules, step-by-step recipes, known limitations and a glossary (assembled from the two reference documents this release then retired).
 - An **enemy shield gauge** down the right edge of the battlefield: the lime fill is the CPU's shield HP out of 5, and a red hatched band at the top of that fill shows how much of it the loaded weapon would strip.
 - **Wind**, rolled at the start of every duel and announced in the field bar with direction and strength (`WIND ▶ 12`, `WIND ◀ 7`, `WIND · CALM`). It is capped at 14 px/s² — mild by design — and the CPU's search simulates it, so the opponent aims into it.
 - **A mobile layout.** On touch devices held sideways the game switches to an immersive grid: joystick and drive buttons in a left rail, weapon picker and FIRE in a right rail, battlefield occupying the full height between them — about 286 px on an 844 × 390 phone, where the old layout overflowed by two and a half screens. Portrait keeps the stacked layout, compacted, with a rotate hint.
