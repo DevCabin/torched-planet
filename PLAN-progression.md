@@ -1,3 +1,6 @@
+> **SUPERSEDED — the decisions are recorded in [PROJECT.md](PROJECT.md) §18. Completed work;
+> keep only for git history.** Delete it: `rm PLAN-progression.md`.
+
 # Plan — Torched Planet: Endless Progression + Power Feel
 
 Written before execution per the Secret Lab Protocol (rule 2). Approved direction from

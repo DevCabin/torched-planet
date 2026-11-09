@@ -2,7 +2,7 @@
 
 A turn-based artillery duel built with HTML, CSS, and vanilla JavaScript — an homage to Scorched Earth. Play as the left tank against a CPU opponent across randomized salt flats, hills, and city rooftops.
 
-Working on the code? [`DEVELOPERS.md`](DEVELOPERS.md) documents the architecture — state model, phase machine, ballistics, terrain carving, economy, the CPU search, input plumbing, the DOM contract, and step-by-step recipes for adding weapons, maps and HUD fields.
+Working on the code? [`PROJECT.md`](PROJECT.md) is the single source of truth — current state, architecture, the state model and phase machine, ballistics, wind, terrain carving, economy, the CPU search, the DOM contract, a decision log, step-by-step recipes, known traps and a roadmap.
 
 ## Run locally
 
@@ -21,8 +21,10 @@ Open `index.html` in a modern browser. You can also serve this directory with `p
 ## Rules
 
 - Both tanks start with unlimited Basic shells, three Large shells, full fuel, and an empty wallet. A shop opens before every player turn. The CPU can spend its own earnings on supplies.
-- **Levels are duels, not turns.** A round is one full exchange of shots; the level advances only when a tank is destroyed — yours or the CPU's. The next round is then played at the next level, on a new battlefield, with both tanks fresh and your bank intact. Destroying the CPU pays a $250 × level bonus; losing a duel still advances the level but pays nothing.
-- **Rising bank.** Shot rewards scale 30% per level while shop prices scale 20% per level, so the wallet slowly outgrows the market. The CPU gains `level - 1` shield HP and a growing shopping allowance, and its marksmanship climbs from genuinely sloppy at level 1 (roughly a 14% chance of hitting you) to near-perfect by level 8.
+- **Levels are duels, not turns.** A round is one full exchange of shots, and the HUD's `ROUND` counter restarts with each duel; the level advances only when a tank is destroyed — yours or the CPU's. The next round is then played at the next level, on a new battlefield, with both tanks fresh and your bank intact. Destroying the CPU pays a $250 × level duel bonus; losing a duel still advances the level and pays a $60 × level salvage.
+- **Rising bank.** Shot rewards scale 30% per level while shop prices scale 20% per level, so the wallet slowly outgrows the market. The CPU gains `level - 1` shield HP and a growing shopping allowance, and its marksmanship climbs from genuinely sloppy at level 1 (roughly a 14% chance of hitting you) to near-perfect by level 11.
+- **Wind.** Each duel is fought in a wind rolled when the level starts, shown in the field bar as `WIND ▶ 12` (blowing right), `WIND ◀ 7` (left) or `WIND · CALM`. It is deliberately mild — at full strength it drifts a typical shot by about one blast radius, and a maximum-range shot by roughly 100 px. The CPU simulates the same wind, so it aims into it.
+- **Enemy gauge.** The vertical bar on the right edge of the battlefield is the CPU's shield: the lime fill is its remaining HP out of 5, and the red hatched band at the top of that fill is how much of the shield your loaded weapon would strip. An empty bar with a `0` means no shield — one clean hit destroys the tank.
 - A direct Basic hit destroys an exposed tank. Shields absorb a hit using their remaining HP, and any excess damage on that hit is absorbed. Nuke and Napalm can also destroy an exposed tank with splash.
 - The same wallet acts as score and spending money. Earn $100 for destroying the opposing tank, $50 for a shield hit, $25 for a near miss, and $35 if an opponent survives a drop caused by your shot — each multiplied by the level reward rate shown in the HUD.
 - Fuel is spent by distance, with up to 45 battlefield units of travel per turn. A Fuel Can adds up to 45 percentage points. Craters can block travel, and drops never damage a tank.

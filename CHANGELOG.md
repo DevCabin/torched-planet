@@ -12,6 +12,11 @@ All notable changes to this project are recorded here.
 - Shift fine aim, single-keypress 1% power nudges, and a last-shot reference tick on the power meter.
 - Terrain amplitude and rooftop heights swell with level.
 - `DEVELOPERS.md`: a full technical architecture reference for new contributors — state model, phase machine, ballistics, terrain carving, economy, CPU search, input plumbing, DOM contract, house rules, six recipes, known limitations and a glossary.
+- An **enemy shield gauge** down the right edge of the battlefield: the lime fill is the CPU's shield HP out of 5, and a red hatched band at the top of that fill shows how much of it the loaded weapon would strip.
+- **Wind**, rolled at the start of every duel and announced in the field bar with direction and strength (`WIND ▶ 12`, `WIND ◀ 7`, `WIND · CALM`). It is capped at 14 px/s² — mild by design — and the CPU's search simulates it, so the opponent aims into it.
+- **A mobile layout.** On touch devices held sideways the game switches to an immersive grid: joystick and drive buttons in a left rail, weapon picker and FIRE in a right rail, battlefield occupying the full height between them — about 286 px on an 844 × 390 phone, where the old layout overflowed by two and a half screens. Portrait keeps the stacked layout, compacted, with a rotate hint.
+- **Two more weapons**: **Nuke Mini** (52 px blast, 3 shield damage, $95) and **Napalm XL** (46 px blast, nine burning pools spread ±88 px, $175). Napalm's fire pools are now declared on the weapon (`burns` / `burnStep`) instead of hardcoded in `impact()`, so a wider napalm is data, not another branch.
+- **Large shells are restockable** for $35 each — the cheapest item in the depot — so a run can be sustained on mid-tier shells instead of hoarding specials.
 
 ### Fixed
 
@@ -26,3 +31,10 @@ All notable changes to this project are recorded here.
 - Power aim is no longer twitchy: the rate dropped from a fixed 48 points/second to a 5.6 → 16 points/second ramp over the first 0.65 s of a hold.
 - HUD now reports LEVEL and BANK with the live reward multiplier, and the shop header shows the level.
 - Renamed the game to **Torched Planet** (previously *Blastline*) across the browser tab title, the in-game header wordmark, and the README. The name carries the *Scorched Earth* homage used in the project description.
+- A lost duel pays **salvage** — `$60 × level` — instead of nothing. The win bonus keeps its `$250 × level` rate, so winning a duel is still worth roughly four losses.
+- `ROUND` counts rounds *within* the current duel and resets to `ROUND 01` when a new level begins, so `LEVEL 02 · ROUND 01` now reads as a fresh duel rather than an ever-climbing tally.
+- The CPU's marksmanship ceiling moved from level 8 to level 11 (`skill` divisor `/ 7` → `/ 10`). Level 1 is untouched at roughly 14% accuracy; the climb is simply slower, so the mid-game is no longer near-lethal.
+- Documentation consolidated into **`PROJECT.md`**, now the single source of truth. It absorbs `HANDOFF.md`, `DEVELOPERS.md` and all four `PLAN-*.md` files, which are superseded and ready to delete. Stale `phase = 'over'` references in the old recipes and diagrams were corrected while merging.
+- Touch hardening across the board: `100dvh` instead of `100vh`, safe-area insets with `viewport-fit=cover`, `overscroll-behavior:none` so pull-to-refresh cannot hijack a drag, `touch-action:manipulation` so double-tap zoom cannot eat a FIRE tap, and a 44 px minimum tap target on every control (the weapon picker was ~28 px).
+- The header no longer overflows on narrow phones: the reset button collapses to `↻ New` below 520 px, keeping its full accessible label.
+- The shop becomes a single scrollable column below 520 px with a sticky **DEPLOY**, instead of three ~110 px columns.

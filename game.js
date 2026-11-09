@@ -9,19 +9,26 @@ const W = canvas.width;
 const H = canvas.height;
 const BEDROCK = H - 24;
 const GRAVITY = 205;
+const WIND_MAX = 14;      // px/s² — the strongest wind a duel can roll (deliberately mild)
+const SHIELD_MAX = 5;     // shield HP ceiling; must match shield-meter max in index.html
 const STEP = 1 / 120;
 const weapons = {
   basic: { name: 'Basic shell', radius: 13, damage: 1, color: '#ffdf91' },
   large: { name: 'Large shell', radius: 29, damage: 2, color: '#ffae6f' },
   nuke: { name: 'Nuke', radius: 107, damage: 5, lethalSplash: true, color: '#f5fcab' },
   spread: { name: '5 Spread', radius: 16, damage: 1, color: '#b2efff' },
-  napalm: { name: 'Napalm', radius: 24, damage: 2, lethalSplash: true, color: '#ff864f' }
+  napalm: { name: 'Napalm', radius: 24, damage: 2, lethalSplash: true, color: '#ff864f', burns: [-45, -23, 0, 23, 45] },
+  nukeMini: { name: 'Nuke Mini', radius: 52, damage: 3, lethalSplash: true, color: '#ffe27a' },
+  napalmXL: { name: 'Napalm XL', radius: 46, damage: 2, lethalSplash: true, color: '#ff6236', burnStep: .075, burns: [-88, -66, -44, -22, 0, 22, 44, 66, 88] }
 };
 const catalog = [
   ['Weapons', [
     { id: 'nuke', name: 'Nuke', price: 160, detail: 'Huge blast · up to 5 shield damage' },
     { id: 'spread', name: '5 Spread', price: 85, detail: 'Five shells in a fan' },
-    { id: 'napalm', name: 'Napalm', price: 105, detail: 'Impact lights nearby ground' }
+    { id: 'napalm', name: 'Napalm', price: 105, detail: 'Impact lights nearby ground' },
+    { id: 'nukeMini', name: 'Nuke Mini', price: 95, detail: 'Tight blast · up to 3 shield damage' },
+    { id: 'napalmXL', name: 'Napalm XL', price: 175, detail: 'Wide fire field · 9 burning pools' },
+    { id: 'large', name: 'Large shell', price: 35, detail: '+1 shell · 2 damage' }
   ]],
   ['Defense', [
     { id: 'weak', name: 'Weak shield', price: 50, hp: 1, detail: '1 HP' },
@@ -31,17 +38,18 @@ const catalog = [
   ['Utilities', [{ id: 'fuel', name: 'Fuel can', price: 35, detail: '+45 fuel · max 100' }]]
 ];
 // Endless progression: `level` counts duels (advances when a tank is destroyed),
-// `round` counts turn cycles. All difficulty and reward scaling uses `level`.
+// `round` counts turn cycles within the current duel. All scaling uses `level`.
 const progression = {
   reward: level => 1 + .3 * (level - 1),
   price: level => 1 + .2 * (level - 1),
-  // Marksmanship: 0 at level 1 (sloppy) → 1 from level 8 onward (lethal).
-  skill: level => Math.min(1, (level - 1) / 7),
+  // Marksmanship: 0 at level 1 (sloppy) → 1 from level 11 onward (lethal).
+  skill: level => Math.min(1, (level - 1) / 10),
   flub: level => .5 * (1 - progression.skill(level)),
   spread: level => 210 - 180 * progression.skill(level),
   cpuShield: level => Math.min(5, level - 1),
   cpuCash: level => 40 + 45 * (level - 1),
-  waveBonus: level => 250 * level
+  waveBonus: level => 250 * level,   // duel bonus, paid only when you win
+  salvage: level => 60 * level       // consolation when you lose the duel
 };
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const radians = angle => angle * Math.PI / 180;
@@ -60,7 +68,7 @@ function clearControls() {
   joystick.style.setProperty('--stick-x', '0px');
   joystick.style.setProperty('--stick-y', '0px');
 }
-let terrain, map, round, level, tanks, active, phase, shells, effects, burns, settling, botDelay, report, status, palette;
+let terrain, map, round, level, wind, tanks, active, phase, shells, effects, burns, settling, botDelay, report, status, palette;
 let last = 0;
 let previousSummary = '';
 let accumulator = 0;
@@ -87,6 +95,12 @@ function makeMap() {
   });
 }
 
+// Wind is rolled once per duel: reset() and nextLevel() call makeMap(), then this.
+// advance() applies it every step, so it bends the shot without dominating the aim.
+function rollWind() {
+  wind = Math.round((Math.random() * 2 - 1) * WIND_MAX);
+}
+
 function ground(x) {
   return terrain[clamp(Math.floor(x), 0, W - 1)];
 }
@@ -99,7 +113,7 @@ function support(x) {
 
 function makeTank(x, color, angle) {
   return { x, y: support(x), color, angle, power: 63, fuel: 100, travel: 0, hp: 0, cash: 0, alive: true, vy: 0,
-    ammo: { basic: Infinity, large: 3, nuke: 0, spread: 0, napalm: 0 } };
+    ammo: { basic: Infinity, large: 3, nuke: 0, spread: 0, napalm: 0, nukeMini: 0, napalmXL: 0 } };
 }
 
 function setStatus(message) {
@@ -120,6 +134,16 @@ function updateHud() {
   byId('multiplier').textContent = progression.reward(level).toFixed(1) + '× REWARDS';
   byId('power-tick').style.setProperty('--at', (lastPower === null ? 0 : clamp(lastPower, 0, 100)) + '%');
   byId('enemy').textContent = !tanks[1].alive ? 'CPU / DOWN' : 'CPU / ' + (tanks[1].hp ? tanks[1].hp + ' HP' : 'NO SHIELD');
+  byId('wind').textContent = wind ? 'WIND ' + (wind > 0 ? '▶ ' : '◀ ') + Math.abs(wind) : 'WIND · CALM';
+  const enemy = tanks[1];
+  const shield = enemy.alive ? clamp(enemy.hp, 0, SHIELD_MAX) : 0;
+  const threat = enemy.alive ? weapons[selected].damage : 0;
+  const strip = Math.min(threat, shield);
+  byId('gauge-hp').textContent = String(shield);
+  byId('gauge-hit').textContent = enemy.alive ? '-' + threat : '—';
+  byId('gauge-fill').style.setProperty('--level', shield / SHIELD_MAX * 100 + '%');
+  byId('gauge-threat').style.setProperty('--from', (shield - strip) / SHIELD_MAX * 100 + '%');
+  byId('gauge-threat').style.setProperty('--size', strip / SHIELD_MAX * 100 + '%');
   byId('fire').disabled = phase !== 'aim';
   weaponSelect.disabled = phase !== 'aim';
 }
@@ -213,6 +237,7 @@ function reset() {
   round = 1;
   level = 1;
   makeMap();
+  rollWind();
   tanks = [makeTank(115, '#d5fa71', 53), makeTank(875, '#ff927a', 127)];
   tanks[1].cash = progression.cpuCash(level);
   tanks[1].hp = progression.cpuShield(level);
@@ -278,6 +303,7 @@ function collision(x, y, shooter) {
 
 function advance(shell, shooter, step) {
   shell.vy += GRAVITY * step;
+  shell.vx += wind * step;
   shell.x += shell.vx * step;
   shell.y += shell.vy * step;
   shell.ticks++;
@@ -323,12 +349,13 @@ function blast(x, y, weapon, direct, carve = true) {
 
 function impact(shell, direct) {
   const { x, y, id } = shell;
-  blast(x, y, weapons[id], direct);
-  if (id === 'napalm') {
-    for (const [index, offset] of [-45, -23, 0, 23, 45].entries()) {
-      burns.push({ x: clamp(x + offset, 0, W - 1), age: 0, delay: .22 + index * .13, spent: false });
-    }
-  }
+  const weapon = weapons[id];
+  blast(x, y, weapon, direct);
+  if (!weapon.burns) return;
+  const step = weapon.burnStep || .13;
+  weapon.burns.forEach((offset, index) => {
+    burns.push({ x: clamp(x + offset, 0, W - 1), age: 0, delay: .22 + index * step, spent: false });
+  });
 }
 
 function settleTank(tank, dt) {
@@ -373,9 +400,10 @@ function finishShot() {
 function nextLevel(summary) {
   const won = tanks[0].alive && !tanks[1].alive;
   const outcome = won ? 'You win the duel!' : tanks[0].alive ? 'Draw.' : tanks[1].alive ? 'CPU wins the duel.' : 'Draw.';
-  round++;
+  round = 1;
   level++;
-  const bonus = won ? progression.waveBonus(level) : 0;
+  const bonus = won ? progression.waveBonus(level) : progression.salvage(level);
+  const payout = won ? 'Duel bonus' : 'Salvage';
   tanks[0].cash += bonus;
   tanks[0].alive = true;
   tanks[0].hp = 0;
@@ -383,6 +411,7 @@ function nextLevel(summary) {
   tanks[0].travel = 0;
   tanks[0].vy = 0;
   makeMap();
+  rollWind();
   tanks[0].x = 115;
   tanks[0].y = support(115);
   tanks[1] = makeTank(875, '#ff927a', 127);
@@ -392,8 +421,8 @@ function nextLevel(summary) {
   burns = [];
   settling = 0;
   byId('map').textContent = map.toUpperCase();
-  previousSummary = outcome + ' ' + summary + (bonus ? ' Level ' + level + ' bonus +$' + bonus + '.' : '');
-  openShop('LEVEL ' + level + ' — ' + outcome + (bonus ? ' Bank bonus +$' + bonus + '.' : ''));
+  previousSummary = outcome + ' ' + summary + (bonus ? ' Level ' + level + ' ' + payout.toLowerCase() + ' +$' + bonus + '.' : '');
+  openShop('LEVEL ' + level + ' — ' + outcome + (bonus ? ' ' + payout + ' +$' + bonus + '.' : ''));
 }
 
 function aimTarget(player) {
@@ -413,7 +442,7 @@ function aimBot() {
     const special = catalog[0][1].find(item => canBuy(bot, item));
     if (special) purchase(bot, special);
   }
-  const id = level < 3 ? 'basic' : ['nuke', 'large', 'napalm', 'spread', 'basic'].find(key => bot.ammo[key]);
+  const id = level < 3 ? 'basic' : ['nuke', 'large', 'napalm', 'nukeMini', 'napalmXL', 'spread', 'basic'].find(key => bot.ammo[key]);
   const target = aimTarget(player);
   let best = { score: Infinity, angle: 130, power: 65 };
   for (let elevation = 25; elevation <= 75; elevation += 5) {

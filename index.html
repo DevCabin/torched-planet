@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="A turn-based artillery duel across destructible terrain.">
 <title>Torched Planet — Artillery Duel</title>
 <link rel="stylesheet" href="style.css">
@@ -10,7 +10,8 @@
 </head>
 <body>
 <main>
-<header><div><span class="eyebrow">FIELD SYSTEMS / ARTILLERY DUEL</span><h1>TORCHED <span>PLANET</span></h1></div><button id="reset">↻ New battlefield</button></header>
+<header><div><span class="eyebrow">FIELD SYSTEMS / ARTILLERY DUEL</span><h1>TORCHED <span>PLANET</span></h1></div><button id="reset" aria-label="New battlefield">↻ New<span class="wide"> battlefield</span></button></header>
+<p class="rotate">↻ Rotate your device for a bigger battlefield</p>
 <section class="hud" aria-label="Tank instruments">
 <div><small>SHOT POWER</small><strong id="power"></strong><span class="meter-wrap"><meter id="power-meter" min="0" max="100"></meter><i id="power-tick"></i></span></div>
 <div><small>BARREL ANGLE</small><strong id="angle"></strong><meter id="angle-meter" min="0" max="180"></meter></div>
@@ -19,8 +20,17 @@
 <div><small>BANK</small><strong id="cash"></strong><small id="multiplier">1.0× REWARDS</small></div>
 </section>
 <section class="field" aria-label="Battlefield">
-<div class="fieldbar"><span id="map"></span><span id="turn"></span><span class="enemy" id="enemy"></span></div>
+<div class="fieldbar"><span id="map"></span><span id="turn"></span><span id="wind"></span><span class="enemy" id="enemy"></span></div>
+<div class="board">
+<div class="stage">
 <canvas id="battle" width="1000" height="520" aria-label="Two tanks on destructible terrain"></canvas>
+<aside class="gauge" aria-label="Enemy shield strength and incoming damage">
+<b id="gauge-hp">0</b>
+<div class="gauge-track" aria-hidden="true"><i id="gauge-fill"></i><em id="gauge-threat"></em></div>
+<small id="gauge-hit">-1</small>
+</aside>
+</div>
+</div>
 </section>
 <p class="status" id="status" role="status"></p>
 <section class="controls" aria-label="Tank controls">

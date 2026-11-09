@@ -25,6 +25,25 @@
     try {
       check('boots at LEVEL 01 · ROUND 01', $('turn').textContent === 'LEVEL 01 · ROUND 01', $('turn').textContent);
       check('shop opens before the first turn', $('shop').open === true, String($('shop').open));
+      check('wind is announced and mild', Math.abs(wind) <= WIND_MAX && /WIND/.test($('wind').textContent), $('wind').textContent);
+      check('enemy gauge mirrors shield HP', $('gauge-hp').textContent === String(tanks[1].hp), $('gauge-hp').textContent + ' vs ' + tanks[1].hp);
+      check('every weapon has an ammo count', Object.keys(weapons).every(id => tanks[0].ammo[id] !== undefined),
+        Object.keys(weapons).filter(id => tanks[0].ammo[id] === undefined).join(',') || 'all present');
+      check('new weapons are stocked', ['nukeMini', 'napalmXL', 'large'].every(id => catalog[0][1].some(item => item.id === id)),
+        catalog[0][1].map(item => item.id).join(','));
+
+      // A Large shell must be restockable: the contract is a catalogue entry plus purchase()'s
+      // ammo branch. Cash is borrowed and returned so the rest of the run is unaffected.
+      const restock = catalog[0][1].find(item => item.id === 'large');
+      const shellsBefore = tanks[0].ammo.large;
+      tanks[0].cash = 500;
+      const bought = !!restock && purchase(tanks[0], restock);
+      check('Large shells can be restocked', bought && tanks[0].ammo.large === shellsBefore + 1,
+        bought ? 'large ' + shellsBefore + ' → ' + tanks[0].ammo.large : 'purchase refused');
+      tanks[0].cash = 0;
+      updateShop();
+      updateWeapons();
+      updateHud();
 
       $('deploy').click();
       check('DEPLOY enables FIRE', $('fire').disabled === false, String($('fire').disabled));
@@ -51,6 +70,7 @@
       }
 
       check('a destruction advances LEVEL', !!found, found ? found.turn : 'no destruction in 40 shots');
+      check('a new duel resets ROUND', !!found && round() === 'ROUND 01', found ? found.turn : '-');
       check('the duel outcome is announced', !!found && /duel|draw/i.test(found.status),
         found ? found.status.slice(0, 70) : '-');
       check('no uncaught errors', errors.length === 0, errors.join(' | ') || 'none');

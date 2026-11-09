@@ -1,3 +1,6 @@
+> **SUPERSEDED — merged into [PROJECT.md](PROJECT.md).** This file is no longer maintained.
+> Delete it: `rm DEVELOPERS.md`.
+
 # DEVELOPERS.md
 
 Technical architecture of **Torched Planet** — a turn-based artillery duel.
@@ -92,8 +95,9 @@ All of this is module scope in `game.js`. There is no class, no store, no observ
 | `shells` | `Shell[]` | Shells in flight; empty means no shot is airborne |
 | `effects` | `{x,y,radius,color,age}[]` | Explosion rings, self-expiring at `.58 s` |
 | `burns` | `{x,age,delay,spent}[]` | Napalm pools waiting to detonate |
-| `round` | `number` | Turn-cycle counter: `+1` after each completed cycle and on every duel end |
+| `round` | `number` | Round within the current duel: `+1` after each completed cycle, reset to `1` by `nextLevel()` |
 | `level` | `number` | **Duel counter.** Advances only when a tank is destroyed; drives all scaling |
+| `wind` | `number` | Wind acceleration in px/s², signed (**+** = right). Rolled once per duel by `rollWind()` |
 | `active` | `0 \| 1` | Whose shot is in progress |
 | `phase` | `'shop' \| 'aim' \| 'bot' \| 'flight' \| 'over'` | See §5 |
 | `report` | `{earned, hits, shields, near, falls, initialY}` | Per-shot tally, rebuilt by `fire()` |
@@ -223,11 +227,20 @@ Integration (`advance()`) — semi-implicit Euler, one call per simulation step:
 
 ```js
 vy += GRAVITY * step           // GRAVITY = 205 px/s²
+vx += wind * step              // wind = ±WIND_MAX (14) px/s², rolled per duel
 x  += vx * step
 y  += vy * step
 ticks++
 // out of play if off-screen or ticks > 1400 (prevents runaway loops)
 ```
+
+**Wind** is the only horizontal force, and it lives *inside* `advance()` on purpose: that is
+the same routine the CPU's 385-shot search calls, so the opponent feels the wind and
+compensates for it for free — the difficulty curve in §11 keeps its meaning. Drift is
+`½·a·t²`, so at `WIND_MAX` a typical shot (power 63, 53°, ≈2.95 s aloft) lands ≈61 px
+downwind and a maximum-range shot ≈100 px — roughly one blast radius, which is what keeps it
+mild. `rollWind()` runs once per duel from `reset()` and `nextLevel()`; `0` is a legal roll
+and reads as `WIND · CALM`. Retune by editing `WIND_MAX`, next to `GRAVITY`.
 
 `advance()` **mutates the shell passed to it and returns what it hit**: `null` (still
 flying), `'ground'`, `'out'`, or a tank object.
@@ -303,7 +316,7 @@ for each tank:
 - `lethalSplash` (Nuke, Napalm) is what lets a near miss kill an **unshielded** tank.
 - `carve = false` is used by napalm burns, so fire doesn't excavate the map.
 
-Payouts, all multiplied by `progression.reward(round)` inside `reward()`:
+Payouts, all multiplied by `progression.reward(level)` inside `reward()`:
 
 | Event | Base |
 | --- | --- |
@@ -327,12 +340,13 @@ not inside the rules.
 const progression = {
   reward:    level => 1 + .3 * (level - 1),          // shot payouts grow 30%/level
   price:     level => 1 + .2 * (level - 1),          // shop prices grow 20%/level
-  skill:     level => Math.min(1, (level - 1) / 7),      // marksmanship 0 → 1 by level 8
+  skill:     level => Math.min(1, (level - 1) / 10),     // marksmanship 0 → 1 by level 11
   flub:      level => .5 * (1 - progression.skill(level)), // chance of a wild shot
   spread:    level => 210 - 180 * progression.skill(level), // aim jitter in px
   cpuShield: level => Math.min(5, level - 1),        // free shield HP for the CPU
   cpuCash:   level => 40 + 45 * (level - 1),         // CPU starting wallet
-  waveBonus: level => 250 * level                    // paid when the CPU is destroyed
+  waveBonus: level => 250 * level,                   // duel bonus, paid when you win
+  salvage:   level => 60 * level                     // paid when you lose the duel
 };
 ```
 
@@ -344,7 +358,7 @@ feel. The HUD shows the live multiplier (`updateHud()` writes `#multiplier`).
 | Function | Role |
 | --- | --- |
 | `catalog` | Static data: 3 sections of items `{id, name, price, hp?, detail}` |
-| `priceOf(item)` | `item.price × progression.price(round)`, rounded |
+| `priceOf(item)` | `item.price × progression.price(level)`, rounded |
 | `canBuy(tank, item)` | Affordability **plus** rules: shields only if upgrading, fuel only under 100 |
 | `purchase(tank, item)` | Deducts, then sets shield HP, adds fuel, or adds ammo |
 | `updateShop()` | Rewrites every button's `disabled` state and price label from `priceOf()` |
@@ -353,10 +367,13 @@ The catalog DOM is built **once** at load from `catalog`; `updateShop()` keeps t
 prices in sync each level. Add an item to the data and it appears automatically.
 
 **Level flow** lives in `nextLevel()`, called from `finishShot()` when either tank is gone:
-`round++`, `level++`, pay `waveBonus` **only if you won the duel**, revive and refuel your
-tank, regenerate the map, reposition you to x=115, build a fresh CPU with scaled shield and
-cash, clear shells and burns, then reopen the shop. Ammo and bank carry over. Because the
-level advances on *any* destruction, losing a duel costs you the bonus but not the run.
+`round = 1`, `level++`, then pay `waveBonus` (`$250 × level`) if you won the duel or
+`salvage` (`$60 × level`) if you lost it, revive and refuel your tank, regenerate the map,
+reposition you to x=115, build a fresh CPU with scaled shield and cash, clear shells and
+burns, then reopen the shop. Ammo and bank carry over. Because the level advances on *any*
+destruction, losing a duel costs you most of the payout but not the run. `round` restarts
+each duel, so the HUD's `ROUND` counts rounds *within* the current level — that is what
+keeps `LEVEL 02 · ROUND 01` readable instead of an ever-climbing tally.
 
 ---
 
@@ -381,6 +398,12 @@ level advances on *any* destruction, losing a duel costs you the bonus but not t
    | 4 | 69 px | 33% |
    | 6 | 38 px | 65% |
    | 8 | 7 px | 100% |
+
+   **Note — these rows were sampled on the old `/ 7` curve** and have not been re-measured
+   since `skill` moved to `/ 10`. The shape still holds: level 1 is untouched (`skill(1)` is
+   `0` either way), and every other row now sits roughly where old level
+   `1 + .7 × (level − 1)` did, so the curve only reaches 100% at level 11. Re-measure
+   `aimTarget()` before quoting a number.
 4. **Search** — 11 elevations (25…75, step 5) × 35 powers (32…100, step 2) = **385 candidate
    trajectories**. Each is simulated with the real `launch()` + `advance()` until it hits
    something, then scored by distance to the target (vertical error weighted 0.65). Hitting
@@ -474,6 +497,9 @@ each:
 | `multiplier` | `updateHud()` | `1.0× REWARDS` |
 | `turn` | `updateHud()` | `LEVEL nn · ROUND nn` |
 | `enemy` | `updateHud()` | CPU shield status |
+| `wind` | `updateHud()` | `WIND ▶ 12` / `WIND ◀ 7` / `WIND · CALM` |
+| `gauge-hp`, `gauge-hit` | `updateHud()` | Enemy shield HP, and the loaded weapon's damage |
+| `gauge-fill`, `gauge-threat` | `updateHud()` | Gauge geometry via `--level`, `--from`, `--size` custom properties |
 | `map` | `reset()`, `nextLevel()` | Map name |
 | `status` | `setStatus()` | The one-line narration |
 | `fire`, `weapon` | `updateHud()` | Disabled unless `phase === 'aim'` |
@@ -590,9 +616,10 @@ There is no storage layer today. The smallest honest version: read `localStorage
 | Term | Meaning |
 | --- | --- |
 | **Bank** | `tank.cash` — score and spending money are the same number |
-| **Round** | Turn-cycle counter (`round`); increments after each full player + CPU cycle |
+| **Round** | Turn-cycle counter (`round`); increments after each full player + CPU cycle and resets to `1` when a new duel begins |
 | **Level** | Duel counter (`level`); increments only when a tank is destroyed |
 | **Duel** | One level's battle; ends in destruction, then `nextLevel()` starts the next |
+| **Wind** | `wind` — horizontal acceleration applied to every shell each step; `+` blows right |
 | **Support** | Highest ground under the tank's footprint (`support()`), vs raw surface (`ground()`) |
 | **Carve** | Lowering `terrain[col]` to create a crater |
 | **Direct** | The tank object a shell actually struck (`blast(x, y, weapon, direct)`) |

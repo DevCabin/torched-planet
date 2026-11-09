@@ -1,3 +1,6 @@
+> **SUPERSEDED — merged into [PROJECT.md](PROJECT.md).** This file is no longer maintained.
+> Delete it: `rm HANDOFF.md`.
+
 # HANDOFF.md
 
 Pick-up notes for the next session. Read this first, then `DEVELOPERS.md` for the
@@ -48,7 +51,7 @@ and absolute paths work for everything else (`node --check /Users/.../game.js`).
 | --- | --- |
 | Repo | `github.com/DevCabin/torched-planet` (public), branch `main` |
 | HEAD | `0199efa` — *Levels count duels not turns; fix self-hit and loss label* |
-| Working tree | clean, in sync with `origin/main` |
+| Working tree | **uncommitted** — §4 answers, the enemy shield gauge and mild wind are all implemented locally; none committed, pushed or harness-verified |
 | Stack | vanilla JS + canvas. No dependencies, no build, no assets |
 | Size | `game.js` 727 lines · `index.html` 44 · `style.css` 63 |
 | Live URL | **none yet** — Vercel deploy is still outstanding (§5.3) |
@@ -89,20 +92,26 @@ page is nearly always a cached or broken script, not a server problem.
 | **CPU skill is a curve, not one jitter** | `progression.skill/flub/spread`. Level 1 lands ~14% of shots and fires Basic only; level 8 is near-perfect. Measured table is in `DEVELOPERS.md` §11. |
 | **Power control ramps** | 16%/s base, `.35 → 1.0` over 0.65 s, Shift quarters it, a tap is exactly 1%. The old flat 48%/s was the "too twitchy" complaint. |
 | **`collision()` skips the shooter** | Otherwise a minimum-power shell detonates on your own hull before it clears the 24 px radius. Splash from your own blast can still cost shield HP. |
+| **A lost duel pays salvage** | `$60 × level` — 24% of the win bonus, so winning stays a 4:1 decision while a loss still buys a shield. Settles §4.1 without touching the no-game-over rule. |
+| **`round` resets each duel** | `nextLevel()` sets `round = 1`, so `ROUND` counts rounds *within* a duel. Dropping the field instead would have broken `tools/drive.js`'s `turn` parsing. |
+| **Accuracy ceiling at level 11** | `skill` divides by 10, not 7. Level 1 is identical either way (`skill(1) === 0`); the mid-game is no longer near-lethal. |
 
 All tunables sit in `progression` (`game.js`, near the top) and the power integrator in
 `update()`. Nothing else needs editing to retune difficulty.
 
 ---
 
-## 4. Open questions for Dr Featherstone
+## 4. Questions from last session — all settled
 
-1. **Lost duel:** pay a consolation bonus, or end the run? Right now a loss pays nothing
-   and play continues. Change is in `nextLevel()` (`const bonus = won ? ... : 0`).
-2. **`ROUND` in the HUD:** `LEVEL 02 · ROUND 17` reads oddly because rounds never reset.
-   Either reset `round` on each level, or drop it from `updateHud()` and show level only.
-3. **Top-end difficulty:** level 8 hits ~100% of the time. If that feels unfair, change
-   `skill: level => Math.min(1, (level - 1) / 7)` to `/ 10` and it ceilings at level 11.
+| Question | Answer | Where |
+| --- | --- | --- |
+| Lost duel: consolation, or end the run? | **Salvage `$60 × level`.** Ending the run would contradict "both outcomes advance the level", and a literal `$0` made a lost duel feel wasted. | `progression.salvage`, `nextLevel()` |
+| `ROUND` reading `LEVEL 02 · ROUND 17` | **Reset, don't drop.** `nextLevel()` sets `round = 1`; deleting the field would break `tools/drive.js`'s `turn` parsing. | `nextLevel()` |
+| Level 8 already lethal | **`skill` divides by `/ 10`**, so the ceiling is level 11 and level 1 is untouched. | `progression.skill` |
+
+Reasoning is recorded in `PLAN-settling-open-questions.md`. **One follow-up remains:** the
+hit-rate table in `DEVELOPERS.md` §11 was sampled on the old `/ 7` curve and needs
+re-measuring against `/ 10` before anyone quotes a number from it.
 
 ---
 
@@ -111,7 +120,8 @@ All tunables sit in `progression` (`game.js`, near the top) and the power integr
 1. **Playtest the duel model.** Highest value by far — nobody has played this build yet.
    Get to about level 5 and judge: is level 1 fair? Is `LEVEL 02 · ROUND 17` confusing?
    Only `progression` should need touching.
-2. **Settle the three open questions in §4.** Small edits, big clarity win.
+2. ~~**Settle the three open questions in §4.**~~ **Done** — decisions are in §3, answers in
+   §4. Sole leftover: re-measure the `DEVELOPERS.md` §11 hit-rate table on the `/ 10` curve.
 3. **Deploy to Vercel** — the last unchecked steps of `PLAN-torched-planet-launch.md`.
    `vercel.json` is already correct (static, `framework: null`, `outputDirectory: "."`),
    and the CLI is logged in as `devcabin` under the `devcabins-projects` team.

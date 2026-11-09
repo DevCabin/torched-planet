@@ -1,3 +1,7 @@
+> **SUPERSEDED — the decisions are recorded in [PROJECT.md](PROJECT.md) §18, and the remaining
+> launch step is in §21. Completed work; keep only for git history.** Delete it:
+> `rm PLAN-torched-planet-launch.md`.
+
 # Plan — Torched Planet Launch
 
 Written before execution per the Secret Lab Protocol (rule 2), so this sequence
