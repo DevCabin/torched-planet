@@ -41,7 +41,7 @@ is the broken part.
 | --- | --- |
 | Repo | `github.com/DevCabin/torched-planet` (public), branch `main` |
 | Stack | vanilla JS + canvas. No dependencies, no build step, no assets |
-| Size | `game.js` 818 lines · `index.html` 54 · `style.css` 102 |
+| Size | `game.js` 787 lines · `index.html` 54 · `style.css` 102 |
 | Live URL | **https://torched-planet.vercel.app** — static deploy of the repo root; pushes to `main` redeploy automatically |
 | Play locally | `open index.html` — that is a complete dev environment |
 
@@ -219,10 +219,9 @@ All module scope in `game.js`. No class, no store, no observer.
 | `wind` | `number` | Wind acceleration in px/s², signed (**+** = right). Rolled once per duel by `rollWind()` |
 | `active` | `0 \| 1` | Whose shot is in progress |
 | `phase` | `'shop' \| 'aim' \| 'bot' \| 'flight'` | See §6 |
-| `report` | `{earned, hits, shields, near, falls, initialY}` | Per-shot tally, rebuilt by `fire()` |
+| `report` | `{earned, hits, shields, armor, near, falls, initialY}` | Per-shot tally, rebuilt by `fire()` |
 | `previousSummary` | `string` | Sentence carried into the next shop dialog |
-| `held` | `Map<string, string>` | Held controls: `event.code` or pointerId → logical key |
-| `stickX`, `stickY` | `number` (-1…1) | Normalised joystick deflection |
+| `held` | `Map<string, string>` | Held controls: `event.code` / pointerId → logical key. Keyboard and touch buttons share it |
 | `selected` | `string` | Currently selected weapon id |
 | `powerHold` | `number` | Seconds the power key has been held (drives the ramp) |
 | `fineAim` | `boolean` | Shift held |
@@ -586,39 +585,43 @@ wind-blind and hand the player a free advantage.
 
 ## 13. Input plumbing
 
-Three input sources, one destination.
+Two input sources, one destination.
 
 ```
-keyboard   ──keydown/keyup──▶ held: Map<code, key>          ─┐
-joystick   ──pointermove───▶ stickX, stickY                 ─┼──▶ update() samples them
-touch L/R  ──pointerdown───▶ held: Map<pointerId, 'z'|'x'>  ─┘    every physics step
+keyboard      ──keydown/keyup──▶ held: Map<code, key>                  ─┐
+touch buttons ──pointerdown────▶ held: Map<pointerId, logical key>     ─┴──▶ update() samples
+                                                                            them every step
 ```
 
 `update()` reads them once per step:
 
 ```js
-turn  = clamp(left - right - stickX, -1, 1)     // -1…1
-power = clamp(up - down - stickY, -1, 1)
+turn  = clamp(left - right, -1, 1)     // -1…1
+power = clamp(up - down, -1, 1)
 move  = right - left
 ```
 
 - **Input is sampled, not event-driven.** A keydown only records state; movement happens in
   `update()`. Behaviour is therefore identical at 60, 120 or 144 fps.
 - `held` is keyed by `event.code` for the keyboard and by `pointerId` for touch buttons, so
-  simultaneous keys and multi-touch never collide.
+  simultaneous presses and multi-touch never collide. **Both sources store the same logical keys**,
+  which is what lets one expression serve them.
 - `clearControls()` wipes everything and is called from `fire()` and on window `blur`. If you
   add a phase change, call it — otherwise a stuck key keeps turning the turret.
-- **Fine aim:** Shift sets `fineAim`, quartering the power rate. A single non-repeat keypress
-  calls `nudge()` for an exact ±1% step, so precision doesn't depend on timing.
-- **Joystick:** `moveStick()` normalises deflection to -1…1 with a 29 px limit and a 5 px
-  deadzone, and pushes `--stick-x` / `--stick-y` CSS variables so the knob follows your thumb
-  without extra JavaScript repaints.
+- **Tap steps, hold ramps.** A single non-repeat keypress calls `nudge()` for an exact ±1 % / ±1°
+  step, so precision doesn't depend on timing; holding ramps power and sweeps the barrel. Touch
+  buttons take the same route — the `[data-hold]` pointerdown handler calls `nudge()` before
+  recording the hold.
+- **Touch buttons replaced a joystick.** `.pad` (aim ◀ ▶, more/less power ▲ ▼) and `.drive` (L R)
+  are six `[data-hold]` buttons. The joystick needed `moveStick()` plus `stickX`/`stickY` to
+  emulate what `held` already does, and it could not step in exact units. Fine aim has no touch
+  equivalent any more — the 1 % / 1° taps are finer than the Shift ramp was.
 
 | Action | Keyboard | Touch |
 | --- | --- | --- |
-| Aim turret | ← → or A D | Drag joystick sideways |
-| Change power | ↑ ↓ or W S — hold to accelerate, tap for 1% steps | Drag joystick vertically |
-| Fine aim | Hold Shift | Drag joystick gently |
+| Aim turret | ← → or A D — hold to sweep, tap for 1° | Tap ◀ ▶, hold to sweep |
+| Change power | ↑ ↓ or W S — hold to accelerate, tap for 1% steps | Tap ▲ ▼, hold to ramp |
+| Fine aim | Hold Shift | Tap: exact 1% / 1° steps |
 | Move tank | Z X | Hold L / R |
 | Fire | Space | Tap FIRE |
 
@@ -651,8 +654,7 @@ images. Order:
 wheel maths are local numbers.
 
 The canvas is a fixed **1000 × 520** surface stretched to container width by CSS. All game
-coordinates are canvas units; CSS pixels appear only in pointer input, which uses
-`getBoundingClientRect()` in the joystick.
+coordinates are canvas units, so nothing in the render path deals in CSS pixels.
 
 **The enemy shield gauge is deliberately NOT drawn on the canvas.** It is a DOM overlay inside
 `.stage` (see §15): `draw()` must stay a pure function of state, and canvas painting at
@@ -683,7 +685,7 @@ each:
 | `weapon` options | `updateWeapons()` | Rebuilt after any ammo change |
 | `shop`, `shop-turn`, `shop-cash`, `catalog`, `shop-note` | `openShop()`, `updateShop()` | Modal shop |
 | `reset`, `deploy`, `fire` | event handlers at the bottom of `game.js` | — |
-| `joystick`, `[data-hold]` | input section at the bottom of `game.js` | — |
+| `.pad`, `.drive` (`[data-hold]`) | input section at the bottom of `game.js` | Touch controls: aim/power left, drive right |
 
 **Rule:** `updateHud()` is the only function that writes the HUD, and it is cheap enough to
 call freely. Add a field there rather than sprinkling DOM writes through game logic.
@@ -706,7 +708,7 @@ overlay is positioned against the canvas box, not against the field bar or a str
 - `#gauge-fill` is bottom-anchored lime, height `hp / 5`.
 - `#gauge-threat` is the **hit strength**: `min(damage, hp)` tall, sitting on top of the fill,
   showing how much of the shield the loaded weapon would strip. It never overflows the bar.
-- `pointer-events: none`, so it can never eat a tap meant for the joystick.
+- `pointer-events: none`, so it can never eat a tap meant for a control.
 - At level 1 the CPU has `cpuShield(1) === 0`, so the bar is empty and reads `0` — the player
   learns "1 damage, nothing to absorb it" before shields appear at level 2.
 - `.fieldbar` gets `flex-wrap: wrap` at ≤520 px because `WIND` made it a four-item row.
@@ -736,14 +738,17 @@ The immersive grid, gated on
 "hud hud hud"
 "left field right1"
 "left field right2"
+"left field right3"
 "status status status"
 ```
 
 - `.controls{display:contents}` is the enabling trick: it removes the controls' own box so
   `.touch`, `label` and `.fire` become grid items in three different areas.
-  **No DOM restructuring, no JavaScript.**
-- The rails exist because the tanks sit at x = 115 and x = 875 — exactly under a bottom-left
-  joystick and a bottom-right FIRE button. Rails also buy vertical space, the scarce axis on a
+  **No DOM restructuring, no JavaScript.** `.touch{display:contents}` does the same one level down,
+  so `.pad` and `.drive` can claim **different** rails — aim and power on the left, drive on the
+  right — while portrait still stacks them together.
+- The rails exist because the tanks sit at x = 115 and x = 875 — exactly where a thumb rests on a
+  thumbstick or a FIRE button. Rails also buy vertical space, the scarce axis on a
   phone: **~286 px of battlefield versus ~176 px** with a bottom control bar.
 - `canvas{object-fit:contain}` fills the field without distortion. In landscape the field is not
   1000:520-shaped, so the canvas letterboxes rather than stretches — which is why the gauge
@@ -867,6 +872,9 @@ These were argued over. Don't undo them casually; each row carries the *why*.
 | **The hull is repaired every duel** | Bank and ammo carry over between duels, so a one-off $5000 purchase must too — otherwise it is a per-duel rental and nobody buys it. |
 | **The CPU earns hull tiers, never buys them** | `progression.cpuArmor` trails the player's arc (level 9 → 2, level 16 → 3), so a bought upgrade stays an edge. `aimBot()` must never purchase one: `makeTank()` wipes the CPU every duel, so it would spend thousands on a reset. |
 | **Hull pips on the canvas, hull count in `#enemy`** | The gauge keeps exactly one meaning (shield), `draw()` stays a pure function of state, and the crew can read a hull where the shells actually land. |
+| **Touch controls are buttons, not a joystick** | `[data-hold]` buttons write the same logical keys the keyboard does, so one `held` map and one expression in `update()` serve both. The joystick needed `moveStick()`, `stickX`, `stickY` and a `getBoundingClientRect()` read to emulate that — and it still could not step in exact units. |
+| **A tap steps 1 %, a hold ramps** | Replaces "drag gently": precision now comes from discrete steps rather than from thumb steadiness, on both input methods. This is why `nudge()` handles angle as well as power. |
+| **Split thumbs: aim/power left, drive right** | The old joystick put four actions under one thumb. Left thumb aims and sets power; right thumb drives and fires. Drive is stacked *above* FIRE rather than beside it — a side-by-side row cost 58 px of battlefield width and put a fuel-burning action against the fire button. |
 
 ---
 
@@ -922,6 +930,11 @@ These were argued over. Don't undo them casually; each row carries the *why*.
    real shot and mark it destroyed — then let the genuine `finishShot()` path run. `node --check`
    can't see this class of bug; only repeated runs can, so run the harness a few times when you
    touch it.
+9. **Headless Chrome reports `(pointer: fine)`, so the immersive mobile layout never renders in a
+   screenshot.** Add `--blink-settings=primaryPointerType=2,availablePointerTypes=2` to flip it —
+   nothing else (no CSS edits, no DevTools juggling) makes `(pointer:coarse)` match. The same flag
+   lets you probe the rails with `getBoundingClientRect()` to prove tap targets are ≥44 px and that
+   the enemy gauge overlaps nothing.
 
 ---
 

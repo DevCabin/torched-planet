@@ -71,19 +71,11 @@ const progression = {
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const radians = angle => angle * Math.PI / 180;
 const held = new Map();
-const joystick = byId('joystick');
-let stickPointer = null;
-let stickX = 0;
-let stickY = 0;
 
 function clearControls() {
   held.clear();
   fineAim = false;
   powerHold = 0;
-  stickPointer = null;
-  stickX = stickY = 0;
-  joystick.style.setProperty('--stick-x', '0px');
-  joystick.style.setProperty('--stick-y', '0px');
 }
 let terrain, map, round, level, wind, tanks, active, phase, shells, effects, burns, settling, botDelay, report, status, palette;
 let last = 0;
@@ -520,8 +512,9 @@ function update(dt) {
   if (phase === 'aim') {
     const player = tanks[0];
     const down = (...keys) => keys.some(key => [...held.values()].includes(key));
-    const turn = clamp(Number(down('arrowleft', 'a')) - Number(down('arrowright', 'd')) - stickX, -1, 1);
-    const power = clamp(Number(down('arrowup', 'w')) - Number(down('arrowdown', 's')) - stickY, -1, 1);
+    // Touch buttons write the same logical keys into `held`, so this one expression serves both.
+    const turn = clamp(Number(down('arrowleft', 'a')) - Number(down('arrowright', 'd')), -1, 1);
+    const power = clamp(Number(down('arrowup', 'w')) - Number(down('arrowdown', 's')), -1, 1);
     const move = Number(down('x')) - Number(down('z'));
     powerHold = power ? powerHold + dt : 0;
     if (turn || power || move) {
@@ -752,45 +745,21 @@ function nudge(key) {
   if (phase !== 'aim' || !player) return;
   if (key === 'arrowup' || key === 'w') player.power = clamp(player.power + 1, 1, 100);
   else if (key === 'arrowdown' || key === 's') player.power = clamp(player.power - 1, 1, 100);
+  else if (key === 'arrowleft' || key === 'a') player.angle = clamp(player.angle + 1, 1, 179);
+  else if (key === 'arrowright' || key === 'd') player.angle = clamp(player.angle - 1, 1, 179);
   else return;
   updateHud();
 }
 
-function moveStick(event) {
-  if (stickPointer !== event.pointerId) return;
-  const box = joystick.getBoundingClientRect();
-  const dx = event.clientX - box.left - box.width / 2;
-  const dy = event.clientY - box.top - box.height / 2;
-  const magnitude = Math.hypot(dx, dy);
-  const limit = 29;
-  const scale = magnitude > limit ? limit / magnitude : 1;
-  stickX = Math.abs(dx) > 5 ? dx * scale / limit : 0;
-  stickY = Math.abs(dy) > 5 ? dy * scale / limit : 0;
-  joystick.style.setProperty('--stick-x', dx * scale + 'px');
-  joystick.style.setProperty('--stick-y', dy * scale + 'px');
-}
-
-joystick.addEventListener('pointerdown', event => {
-  if (phase !== 'aim' || stickPointer !== null) return;
-  stickPointer = event.pointerId;
-  joystick.setPointerCapture(stickPointer);
-  moveStick(event);
-});
-joystick.addEventListener('pointermove', moveStick);
-for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-  joystick.addEventListener(type, event => {
-    if (stickPointer !== event.pointerId) return;
-    stickPointer = null;
-    stickX = stickY = 0;
-    joystick.style.setProperty('--stick-x', '0px');
-    joystick.style.setProperty('--stick-y', '0px');
-  });
-}
+// Touch controls are plain buttons: they write the same logical keys into `held` that the keyboard
+// does, so update() samples them identically. A tap steps exactly 1 % or 1° via nudge() and a hold
+// ramps or sweeps — the joystick this replaced could do neither exactly.
 for (const button of document.querySelectorAll('[data-hold]')) {
   button.addEventListener('pointerdown', event => {
     event.preventDefault();
     if (phase !== 'aim') return;
-    button.setPointerCapture(event.pointerId);
+    try { button.setPointerCapture(event.pointerId); } catch { /* pointer already released */ }
+    nudge(button.dataset.hold);
     held.set(event.pointerId, button.dataset.hold);
   });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {

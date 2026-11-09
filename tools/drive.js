@@ -155,6 +155,39 @@
         tanks[0].armorMax === 1 && tanks[0].armor === 1 && tanks[0].color === armorColor(1),
         'armorMax ' + tanks[0].armorMax + ' colour ' + tanks[0].color);
 
+      // ── Touch buttons replaced the joystick ─────────────────────────────────────────────────
+      // The joystick's job is now six [data-hold] buttons feeding the keyboard's own sampling path,
+      // so a tap must step exactly one unit — that precision is what replaces "drag gently".
+      check('the joystick element is gone', document.getElementById('joystick') === null, 'joystick# ' + !!document.getElementById('joystick'));
+      const holds = [...document.querySelectorAll('[data-hold]')].map(button => button.dataset.hold);
+      check('six hold buttons cover aim, power and drive',
+        holds.join(',') === 'arrowleft,arrowright,arrowup,arrowdown,z,x', holds.join(','));
+
+      $('deploy').click();                       // same state reset() left us in: shopping → aiming
+      tanks[0].power = 50;
+      tanks[0].angle = 90;
+      updateHud();
+      const press = (hold, id) => {
+        const button = document.querySelector('[data-hold="' + hold + '"]');
+        button.dispatchEvent(new PointerEvent('pointerdown', { pointerId: id, bubbles: true, cancelable: true }));
+        return button;
+      };
+      const release = (button, id) =>
+        button.dispatchEvent(new PointerEvent('pointerup', { pointerId: id, bubbles: true }));
+      check('the pad is reachable while aiming', phase === 'aim', phase);
+
+      let button = press('arrowup', 41);
+      check('a tap on a power button steps exactly 1%', tanks[0].power === 51, 'power ' + tanks[0].power);
+      release(button, 41);
+
+      button = press('arrowleft', 42);
+      check('a tap on an aim button steps exactly 1°', tanks[0].angle === 91, 'angle ' + tanks[0].angle);
+      run(120);                                  // one second with the button still held
+      const swept = tanks[0].angle;
+      release(button, 42);
+      check('holding an aim button sweeps the barrel', swept > 95, '91 → ' + swept.toFixed(1));
+      run(60);
+      check('releasing the button stops the sweep', tanks[0].angle === swept, swept + ' → ' + tanks[0].angle);
       check('no uncaught errors', errors.length === 0, errors.join(' | ') || 'none');
     } catch (error) {
       errors.push(error.message);

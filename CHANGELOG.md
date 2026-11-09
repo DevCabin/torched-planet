@@ -16,11 +16,17 @@ All notable changes to this project are recorded here.
 - `blast()`'s lethal branch now spends a hull point instead of destroying outright. A standard tank carries `1/1`, so behaviour at tier 1 is unchanged — the original harness assertions still mean what they said.
 - The gauge's "empty bar means one clean hit destroys the tank" promise is now qualified: the enemy readout appends `· HULL n` from level 9, and `README.md` says *standard* tank. The gauge itself is untouched — hull is a hull, not a shield.
 - `aimBot()`'s defensive purchase moved into `shieldFor(tank)`, a pure helper that filters `!item.armor` so the CPU can never buy a tier that `makeTank()` would wipe next duel.
+- **Touch controls are buttons now, not a joystick.** Aim and power (◀ ▶ ▲ ▼) sit in the left rail; drive L/R in the right rail, directly above FIRE. They are ordinary `[data-hold]` buttons writing the *same logical keys the keyboard does*, so `held` and one expression in `update()` serve both inputs. Splitting the thumbs means `.touch` dissolves into `display:contents` in the landscape grid so `.pad` and `.drive` can claim separate rails, while portrait keeps them stacked; the grid gains a fifth row (`right3`) and the battlefield keeps its width.
+
+### Removed
+
+- The mobile joystick — one 102 px circle doing four jobs under a single thumb. `moveStick()`, `stickPointer`, `stickX`, `stickY`, the `--stick-x` / `--stick-y` properties and the five `.joystick` CSS rules are all deleted.
 
 ### Fixed
 
 - `tools/drive.js` declared local `level`/`round` helpers that shadowed the game's numeric state; assigning to them threw *"Assignment to constant variable"*. Renamed `levelText`/`roundText`, which is what made the new armour assertions possible.
 - **The harness is deterministic now, and about three times faster.** Two assertions secretly depended on CPU marksmanship: the single-cycle check assumed the level-1 CPU would miss, and the "a destruction advances LEVEL" check fired 1%-power shots for up to 40 turns hoping the CPU would land the kill. It often doesn't — a level-1 CPU can be *structurally* unable to hit, because those scripted shots carve a crater under the player and a ridge does the rest (one probe run sat at level 1 for 150 turns; another reached level 8 in the same span). The duel is now ended deliberately through the real `finishShot() → nextLevel()` path, and the one cycle the harness does play is played behind a temporary shield. 20 consecutive runs came back 30/30.
+- **Precision where the joystick had none:** a tap now steps exactly 1 % of power or 1° of angle, and a hold ramps or sweeps. `nudge()` handles angle as well as power, and the `[data-hold]` handler calls it before recording the hold, so touch and keyboard behave identically. Fine aim is dropped on touch — 1 %/1° taps are finer than the Shift ramp was. `setPointerCapture` is guarded against a pointer that has already been released.
 
 ## [1.0.0] — 2026-11-09
 

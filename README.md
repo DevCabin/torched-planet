@@ -18,9 +18,9 @@ Open `index.html` in a modern browser. You can also serve this directory with `p
 
 | Action | Keyboard | Touch |
 | --- | --- | --- |
-| Aim turret | Left / Right or A / D | Drag joystick sideways |
-| Change power | Up / Down or W / S — hold to accelerate, tap for 1% steps | Drag joystick vertically |
-| Fine aim | Hold Shift while adjusting power | Drag joystick gently |
+| Aim turret | Left / Right or A / D — tap for 1° | Tap ◀ ▶, hold to sweep |
+| Change power | Up / Down or W / S — hold to accelerate, tap for 1% steps | Tap ▲ ▼, hold to ramp |
+| Fine aim | Hold Shift while adjusting power | Tap: exact 1% / 1° steps |
 | Move tank | Z / X | Hold L / R |
 | Fire | Space | Tap Fire |
 
