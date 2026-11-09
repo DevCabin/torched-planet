@@ -54,6 +54,7 @@ dialog::backdrop{background:#10181bd9}
 .catalog h3{margin:4px 0;font:800 .8rem ui-monospace,monospace;color:var(--lime);text-transform:uppercase}
 .catalog button{text-align:left;padding:7px;display:grid;gap:3px}
 .catalog button span{font-size:.78rem;color:var(--muted)}
+.catalog button i{width:11px;height:11px;border-radius:3px;background:var(--swatch);box-shadow:0 0 0 1px #0008}
 .catalog button b{color:var(--lime);font-family:ui-monospace,monospace;font-size:.8rem}
 #deploy{width:100%;position:sticky;bottom:0}
 @media(pointer:coarse),(max-width:720px){

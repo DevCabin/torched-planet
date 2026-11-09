@@ -41,7 +41,7 @@ is the broken part.
 | --- | --- |
 | Repo | `github.com/DevCabin/torched-planet` (public), branch `main` |
 | Stack | vanilla JS + canvas. No dependencies, no build step, no assets |
-| Size | `game.js` 756 lines · `index.html` 54 · `style.css` 101 |
+| Size | `game.js` 818 lines · `index.html` 54 · `style.css` 102 |
 | Live URL | **https://torched-planet.vercel.app** — static deploy of the repo root; pushes to `main` redeploy automatically |
 | Play locally | `open index.html` — that is a complete dev environment |
 
@@ -238,16 +238,20 @@ All module scope in `game.js`. No class, no store, no observer.
   fuel,            // 0…100
   travel,          // distance moved this turn, capped at 45
   hp,              // shield hit points; 0 means "no shield", NOT "dead"
+  armor,           // hull hit points remaining; 1 for a standard tank
+  armorMax,        // the hull tier bought (1–3). nextLevel() refills `armor` from this
   cash,            // the bank: score and spending money are the same number
   alive,           // false once destroyed
   vy,              // vertical velocity, for falling after terrain changes
-  ammo: { basic: Infinity, large: 3, nuke: 0, spread: 0, napalm: 0 }
-}
+  ammo: { basic: Infinity, large: 3, nuke: 0, spread: 0, napalm: 0, nukeMini: 0, napalmXL: 0 }
 ```
 
-Two subtleties that confuse newcomers:
+Three subtleties that confuse newcomers:
 
 - **`hp === 0` does not mean destroyed.** It means unshielded. `alive` is the death flag.
+- **`armor` is hit points, not damage points.** One point comes off per hit whatever the shell, so
+  Tank II survives two hits and Tank III three. `armorMax` is what was bought and is what the tier
+  colour and the pips are derived from.
 - **`y` is a contact point, not a centre.** Everything that draws or hits a tank measures from
   `(x, y)` with negative offsets going up — the hull centre is `y - 12`.
 
@@ -425,7 +429,9 @@ for each tank:
   contact = (tank === direct) || hullWithinBlast || shieldBubbleOverlaps
   if contact && tank.hp > 0:  → shield absorbs: hp -= damage, reward $50
   else if direct || (contact && weapon.lethalSplash):
-                              → tank.alive = false, reward $100
+                              → armor -= 1
+                                armor still > 0 → the hull holds, reward $40
+                                armor == 0     → tank.alive = false, reward $100
   else if not the shooter && hullWithinBlast + 42:
                               → near miss, reward $25
 ```
@@ -457,12 +463,13 @@ Payouts, all multiplied by `progression.reward(level)` inside `reward()`:
 | Event | Base |
 | --- | --- |
 | Destroy the opposing tank | $100 |
+| Strip a hull point (the tank survives) | $40 |
 | Damage a shield | $50 |
 | Near miss (within radius + 42) | $25 |
 | Opponent survives a drop your shot caused | $35 |
 
 `report` is rebuilt at the top of `fire()` and accumulates `earned` plus the counters (`hits`,
-`shields`, `near`, `falls`); `finishShot()` turns it into the status sentence.
+`shields`, `armor`, `near`, `falls`); `finishShot()` turns it into the status sentence.
 **`report` must exist before any `blast()` call** — that is why `fire()` creates it first.
 
 ---
@@ -480,6 +487,7 @@ const progression = {
   flub:      level => .5 * (1 - progression.skill(level)), // chance of a wild shot
   spread:    level => 210 - 180 * progression.skill(level), // aim jitter in px
   cpuShield: level => Math.min(5, level - 1),        // free shield HP for the CPU
+  cpuArmor:  level => level >= 16 ? 3 : level >= 9 ? 2 : 1, // hull tiers; trails the player's arc
   cpuCash:   level => 40 + 45 * (level - 1),         // CPU starting wallet
   waveBonus: level => 250 * level,                   // duel bonus, paid when you win
   salvage:   level => 60 * level                     // paid when you lose the duel
@@ -508,6 +516,11 @@ cheap resupply must sit **last**, or the CPU will stop reaching for Nuke/Spread/
 category indices are positional too (`catalog[1][1]` shields, `catalog[2][1][0]` fuel):
 **append items within a section, never insert a new category.**
 
+The **Tank II / Tank III** hull upgrades live at the end of `Defense`, behind the shields. They are
+the exception that proves the rule: `shieldFor(tank)` exists purely so the CPU's reversed search
+skips them (`!item.armor`). The CPU's hull comes from `progression.cpuArmor(level)` instead —
+buying a tier would spend thousands on armour that `makeTank()` wipes at the next duel.
+
 **Level flow** lives in `nextLevel()`, called from `finishShot()` when either tank is gone:
 `round = 1`, `level++`, then pay `waveBonus` (`$250 × level`) if you won the duel or `salvage`
 (`$60 × level`) if you lost it, revive and refuel your tank, regenerate the map, reposition you
@@ -523,8 +536,9 @@ readable instead of an ever-climbing tally.
 
 `aimBot()` is a shopping step followed by a brute-force search.
 
-1. **Shop** — buys the most expensive affordable shield (`catalog[1][1]` reversed), a fuel can
-   if below 30, and a special weapon if it has no Large/Nuke left.
+1. **Shop** — buys the most expensive affordable shield via `shieldFor()` (never a hull tier), a
+   fuel can if below 30, and a special weapon if it has no Large/Nuke left. Its hull tier is free
+   and level-driven (`progression.cpuArmor`).
 2. **Pick a weapon** — Basic only at levels 1–2, then the first available of
    `['nuke','large','napalm','spread','basic']`. Early levels therefore can't one-shot you
    through splash.
@@ -649,13 +663,13 @@ each:
 
 | ID | Written by | Purpose |
 | --- | --- | --- |
-| `power`, `angle`, `fuel`, `shield` | `updateHud()` | Numeric readouts |
+| `power`, `angle`, `fuel`, `shield` | `updateHud()` | Numeric readouts. `shield` gains a hull tier suffix (`OFF · II`) once upgraded |
 | `power-meter`, `angle-meter`, `fuel-meter`, `shield-meter` | `updateHud()` | `<meter>` values (max must match scale) |
 | `power-tick` | `updateHud()` | Last-shot reference tick (`--at` custom property) |
 | `cash` | `updateHud()` | The bank |
 | `multiplier` | `updateHud()` | `1.0× REWARDS` |
 | `turn` | `updateHud()` | `LEVEL nn · ROUND nn` |
-| `enemy` | `updateHud()` | `CPU / 3 HP`, `NO SHIELD`, or `CPU / DOWN` |
+| `enemy` | `updateHud()` | `CPU / 3 HP`, `NO SHIELD`, `CPU / DOWN`, plus `· HULL n` from level 9 |
 | `wind` | `updateHud()` | `WIND ▶ 12` / `WIND ◀ 7` / `WIND · CALM` |
 | `gauge-hp`, `gauge-hit` | `updateHud()` | Enemy shield HP, and the loaded weapon's damage |
 | `gauge-fill`, `gauge-threat` | `updateHud()` | Gauge geometry via `--level`, `--from`, `--size` |
@@ -692,6 +706,13 @@ overlay is positioned against the canvas box, not against the field bar or a str
 - At level 1 the CPU has `cpuShield(1) === 0`, so the bar is empty and reads `0` — the player
   learns "1 damage, nothing to absorb it" before shields appear at level 2.
 - `.fieldbar` gets `flex-wrap: wrap` at ≤520 px because `WIND` made it a four-item row.
+
+**Hull points are deliberately not on this bar.** The gauge answers one question — how much shield
+is left and how much of it a shot strips — so putting a hull stat on it would blunt that. Hull is
+drawn instead as pips above each tank in `drawTank()` (only when `armorMax > 1`, at y = -77 so they
+clear the 12 px label), with the remaining count in the `#enemy` readout and the tier in the SHIELD
+cell. The gauge's "empty bar = one hit kills" promise therefore survives as "…unless the tank has
+hull points", which `#enemy` spells out.
 
 ### Mobile and the layout contract
 
@@ -766,8 +787,14 @@ empty and `updateWeapons()` silently marks it disabled.
 ### Add a shop item
 
 Add it to the right `catalog` section; `updateShop()` and the DOM pick it up automatically.
-`purchase()` handles exactly three kinds: `hp` items, `id === 'fuel'`, and everything else as
-ammo. A new *kind* of item needs a branch in `purchase()` **and** a rule in `canBuy()`.
+`purchase()` handles exactly four kinds: `hp` items, `armor` tiers, `id === 'fuel'`, and everything
+else as ammo. A new *kind* of item needs a branch in `purchase()` **and** a rule in `canBuy()`.
+
+**Armour tiers are doubly special:** `canBuy()` enforces the ladder (`armorMax === item.armor - 1`),
+`purchase()` also recolours the tank, and `shieldFor()` must keep excluding them from the CPU's
+shopping. Add a tier by extending `armorTiers` (tier, name, short, colour) and appending a
+`catalog[1][1]` item with a matching `armor` value — the pips, the HUD suffix and the shop swatch
+all read from that table.
 
 ### Add a map
 
@@ -830,6 +857,12 @@ These were argued over. Don't undo them casually; each row carries the *why*.
 | **Wind is mild: ±14 px/s²** | ≈61 px of drift on a typical shot — about one blast radius. Enough to demand compensation, never enough to make skill irrelevant. |
 | **The gauge is DOM, not canvas** | `draw()` stays a pure function of state, and painting at x ≈ 960–1000 would cover terrain the CPU stands on. |
 | **`makeMap()` before `makeTank()` in `reset()`** | Tanks read `support()` at construction, which reads `terrain`. |
+| **Hull points are a separate stat, not `hp`** | `hp` *is* the shield — `collision()`'s bubble test, the enemy gauge and `shield-meter` all read it. Overloading it would corrupt three systems at once. |
+| **One hit point per hit, whatever the shell** | Tank II/III are sold as *hit* points. Charging `weapon.damage` instead would let a single Large shell erase a $2000 upgrade, which is not what was bought. Nukes still one-shot a standard tank, which is where that lethality belongs. |
+| **Armour is a strict ladder** | `armorMax === item.armor - 1`: Tank III requires Tank II. $7000 in two purchase moments reads as a progression; letting a patient saver skip straight to Tank III for $5000 would undercut the first rung. |
+| **The hull is repaired every duel** | Bank and ammo carry over between duels, so a one-off $5000 purchase must too — otherwise it is a per-duel rental and nobody buys it. |
+| **The CPU earns hull tiers, never buys them** | `progression.cpuArmor` trails the player's arc (level 9 → 2, level 16 → 3), so a bought upgrade stays an edge. `aimBot()` must never purchase one: `makeTank()` wipes the CPU every duel, so it would spend thousands on a reset. |
+| **Hull pips on the canvas, hull count in `#enemy`** | The gauge keeps exactly one meaning (shield), `draw()` stays a pure function of state, and the crew can read a hull where the shells actually land. |
 
 ---
 
@@ -838,7 +871,14 @@ These were argued over. Don't undo them casually; each row carries the *why*.
 - **No `npm test`-style suite.** Verification is `node --check`, the headless harness (§2), and
   playing it.
 - **One global mutable namespace.** No encapsulation; a typo can silently clobber state.
-- **No persistence** — level and bank vanish on reload.
+- **No persistence** — level and bank vanish on reload. A Tank II/III hull upgrade therefore lasts
+  the run, not the browser session.
+- **Hull-hit rewards inflate the late-game economy.** Every surviving hull hit pays $40, so a
+  level-16 CPU (3 hull points) is worth `3 × $40 + $100` before the reward multiplier — roughly
+  double the old kill value when hull tiers first appear.
+- **Lethal splash can strip your own hull.** A self-inflicted Napalm XL can take three points off a
+  Tank III in one shot. That is the same exposure that killed you outright before hull points
+  existed, now priced in hit points instead of a duel.
 - **The CPU search is synchronous** (385 simulated shots in a single tick).
 - **The canvas is not DPR-scaled**, so it looks soft on high-density displays.
 - **No audio.**

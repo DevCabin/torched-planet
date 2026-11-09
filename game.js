@@ -21,6 +21,16 @@ const weapons = {
   nukeMini: { name: 'Nuke Mini', radius: 52, damage: 3, lethalSplash: true, color: '#ffe27a' },
   napalmXL: { name: 'Napalm XL', radius: 46, damage: 2, lethalSplash: true, color: '#ff6236', burnStep: .075, burns: [-88, -66, -44, -22, 0, 22, 44, 66, 88] }
 };
+// Hull armour tiers. `armor` is the number of hits a tank absorbs before it is destroyed, and it
+// doubles as the chassis colour so an upgrade is visible on the field. Tier 1 is the standard
+// tank: exactly the pre-upgrade rules, which is what keeps blast() honest for both sides.
+const armorTiers = [
+  { tier: 1, name: 'Tank I', short: 'I', color: '#d5fa71' },
+  { tier: 2, name: 'Tank II', short: 'II', color: '#ffd166' },
+  { tier: 3, name: 'Tank III', short: 'III', color: '#c79bff' }
+];
+const armorTier = tier => armorTiers.find(entry => entry.tier === tier) || armorTiers[0];
+const armorColor = tier => armorTier(tier).color;
 const catalog = [
   ['Weapons', [
     { id: 'nuke', name: 'Nuke', price: 160, detail: 'Huge blast · up to 5 shield damage' },
@@ -33,7 +43,11 @@ const catalog = [
   ['Defense', [
     { id: 'weak', name: 'Weak shield', price: 50, hp: 1, detail: '1 HP' },
     { id: 'medium', name: 'Medium shield', price: 115, hp: 3, detail: '3 HP' },
-    { id: 'strong', name: 'Strong shield', price: 175, hp: 5, detail: '5 HP' }
+    { id: 'strong', name: 'Strong shield', price: 175, hp: 5, detail: '5 HP' },
+    // Armour sits last so aimBot()'s reversed shield search still finds Strong first once it
+    // filters these out. They are a ladder: Tank III requires Tank II.
+    { id: 'tank2', name: 'Tank II', price: 2000, armor: 2, detail: '2 hull hits · amber chassis' },
+    { id: 'tank3', name: 'Tank III', price: 5000, armor: 3, detail: '3 hull hits · violet chassis' }
   ]],
   ['Utilities', [{ id: 'fuel', name: 'Fuel can', price: 35, detail: '+45 fuel · max 100' }]]
 ];
@@ -47,6 +61,9 @@ const progression = {
   flub: level => .5 * (1 - progression.skill(level)),
   spread: level => 210 - 180 * progression.skill(level),
   cpuShield: level => Math.min(5, level - 1),
+  // CPU hull tiers trail the player's purchase arc on purpose (Tank II lands around level 5–7,
+  // Tank III around 10–12), so a bought upgrade stays an edge rather than being cancelled.
+  cpuArmor: level => level >= 16 ? 3 : level >= 9 ? 2 : 1,
   cpuCash: level => 40 + 45 * (level - 1),
   waveBonus: level => 250 * level,   // duel bonus, paid only when you win
   salvage: level => 60 * level       // consolation when you lose the duel
@@ -113,6 +130,7 @@ function support(x) {
 
 function makeTank(x, color, angle) {
   return { x, y: support(x), color, angle, power: 63, fuel: 100, travel: 0, hp: 0, cash: 0, alive: true, vy: 0,
+    armor: 1, armorMax: 1,
     ammo: { basic: Infinity, large: 3, nuke: 0, spread: 0, napalm: 0, nukeMini: 0, napalmXL: 0 } };
 }
 
@@ -123,8 +141,11 @@ function setStatus(message) {
 
 function updateHud() {
   const player = tanks[0];
+  // The tier suffix appears only once the hull is upgraded, so the standard bench is untouched.
+  const tier = armorTier(player.armorMax);
+  const hull = tier.tier > 1 ? ' · ' + tier.short : '';
   const values = { power: [Math.round(player.power) + '%', player.power], angle: [Math.round(player.angle) + '°', player.angle],
-    fuel: [Math.round(player.fuel) + '%', player.fuel], shield: [player.hp ? player.hp + ' HP' : 'OFF', player.hp] };
+    fuel: [Math.round(player.fuel) + '%', player.fuel], shield: [(player.hp ? player.hp + ' HP' : 'OFF') + hull, player.hp] };
   for (const [id, [label, value]] of Object.entries(values)) {
     byId(id).textContent = label;
     byId(id + '-meter').value = value;
@@ -133,7 +154,10 @@ function updateHud() {
   byId('turn').textContent = 'LEVEL ' + String(level).padStart(2, '0') + ' · ROUND ' + String(round).padStart(2, '0');
   byId('multiplier').textContent = progression.reward(level).toFixed(1) + '× REWARDS';
   byId('power-tick').style.setProperty('--at', (lastPower === null ? 0 : clamp(lastPower, 0, 100)) + '%');
-  byId('enemy').textContent = !tanks[1].alive ? 'CPU / DOWN' : 'CPU / ' + (tanks[1].hp ? tanks[1].hp + ' HP' : 'NO SHIELD');
+  // An empty shield is no longer the end of a tank's defence once hull points exist, so the
+  // enemy readout names them explicitly rather than implying "empty bar = one hit kills".
+  byId('enemy').textContent = !tanks[1].alive ? 'CPU / DOWN'
+    : 'CPU / ' + (tanks[1].hp ? tanks[1].hp + ' HP' : 'NO SHIELD') + (tanks[1].armorMax > 1 ? ' · HULL ' + tanks[1].armor : '');
   byId('wind').textContent = wind ? 'WIND ' + (wind > 0 ? '▶ ' : '◀ ') + Math.abs(wind) : 'WIND · CALM';
   const enemy = tanks[1];
   const shield = enemy.alive ? clamp(enemy.hp, 0, SHIELD_MAX) : 0;
@@ -162,17 +186,30 @@ function updateWeapons() {
 const priceOf = item => Math.round(item.price * progression.price(level));
 
 function canBuy(tank, item) {
-  return tank.cash >= priceOf(item) && (!item.hp || tank.hp < item.hp) && (item.id !== 'fuel' || tank.fuel < 100);
+  return tank.cash >= priceOf(item)
+    && (!item.hp || tank.hp < item.hp)
+    && (!item.armor || tank.armorMax === item.armor - 1)   // armour is a ladder: one rung at a time
+    && (item.id !== 'fuel' || tank.fuel < 100);
 }
 
 function purchase(tank, item) {
   if (!canBuy(tank, item)) return false;
   tank.cash -= priceOf(item);
   if (item.hp) tank.hp = item.hp;
-  else if (item.id === 'fuel') tank.fuel = Math.min(100, tank.fuel + 45);
+  else if (item.armor) {
+    // Hull tier: `armor` is the damage it can take, `armorMax` what was bought. nextLevel()
+    // refills the first from the second, so the upgrade survives every duel in the run.
+    tank.armorMax = item.armor;
+    tank.armor = item.armor;
+    tank.color = armorColor(item.armor);
+  } else if (item.id === 'fuel') tank.fuel = Math.min(100, tank.fuel + 45);
   else tank.ammo[item.id]++;
   return true;
 }
+
+// The CPU's defence shopping is shields only. Armour tiers are earned from `progression.cpuArmor`
+// instead — buying them would burn its wallet on a tier that makeTank() wipes next duel.
+const shieldFor = tank => catalog[1][1].slice().reverse().find(item => !item.armor && canBuy(tank, item));
 
 function updateShop() {
   byId('shop-cash').textContent = '$' + tanks[0].cash;
@@ -195,6 +232,12 @@ for (const [category, items] of catalog) {
     const price = document.createElement('b');
     detail.textContent = item.detail;
     price.textContent = '$' + item.price;
+    // Armour tiers get a colour chip, so the shop teaches the chassis colour before you buy it.
+    if (item.armor) {
+      const swatch = document.createElement('i');
+      swatch.style.setProperty('--swatch', armorColor(item.armor));
+      button.append(swatch);
+    }
     button.append(item.name, detail, price);
     button.onclick = () => {
       if (phase === 'shop' && purchase(tanks[0], item)) {
@@ -238,9 +281,10 @@ function reset() {
   level = 1;
   makeMap();
   rollWind();
-  tanks = [makeTank(115, '#d5fa71', 53), makeTank(875, '#ff927a', 127)];
+  tanks = [makeTank(115, armorColor(1), 53), makeTank(875, '#ff927a', 127)];
   tanks[1].cash = progression.cpuCash(level);
   tanks[1].hp = progression.cpuShield(level);
+  tanks[1].armor = tanks[1].armorMax = progression.cpuArmor(level);
   previousSummary = '';
   lastPower = null;
   shells = [];
@@ -279,7 +323,7 @@ function fire(id) {
   if ((phase !== 'aim' && phase !== 'bot') || !tank.ammo[id]) return;
   tank.ammo[id]--;
   if (!active) lastPower = tank.power;
-  report = { earned: 0, hits: 0, shields: 0, near: 0, falls: 0, initialY: tanks[1 - active].y };
+  report = { earned: 0, hits: 0, shields: 0, armor: 0, near: 0, falls: 0, initialY: tanks[1 - active].y };
   const offsets = id === 'spread' ? [-10, -5, 0, 5, 10] : [0];
   shells = offsets.map(offset => launch(tank, clamp(tank.angle + offset, 1, 179), tank.power, id));
   phase = 'flight';
@@ -333,8 +377,13 @@ function blast(x, y, weapon, direct, carve = true) {
       tank.hp = Math.max(0, tank.hp - damage);
       if (tank !== shooter) reward(50, 'shields');
     } else if (tank === direct || (contact && weapon.lethalSplash)) {
-      tank.alive = false;
-      if (tank !== shooter) reward(100, 'hits');
+      // Hull takes one hit point per hit, whatever the shell: a shield already absorbed the
+      // damage on its own branch above. A standard tank has 1, so this still kills outright.
+      tank.armor = Math.max(0, tank.armor - 1);
+      if (!tank.armor) {
+        tank.alive = false;
+        if (tank !== shooter) reward(100, 'hits');
+      } else if (tank !== shooter) reward(40, 'armor');
     } else if (tank !== shooter && hullDistance <= weapon.radius + 42) {
       reward(25, 'near');
     }
@@ -375,6 +424,7 @@ function finishShot() {
   const tags = [];
   if (report.hits) tags.push('tank destroyed');
   if (report.shields) tags.push('shield hit ×' + report.shields);
+  if (report.armor) tags.push('hull hit ×' + report.armor);
   if (report.near) tags.push('near miss ×' + report.near);
   if (report.falls) tags.push('fall bonus');
   const summary = (active ? 'CPU' : 'You') + (report.earned ? ' earned $' + report.earned + ' (' + tags.join(', ') + ').' : ' earned $0.');
@@ -407,6 +457,8 @@ function nextLevel(summary) {
   tanks[0].cash += bonus;
   tanks[0].alive = true;
   tanks[0].hp = 0;
+  tanks[0].armor = tanks[0].armorMax;                 // the hull is repaired along with the tank
+  tanks[0].color = armorColor(tanks[0].armorMax);
   tanks[0].fuel = 100;
   tanks[0].travel = 0;
   tanks[0].vy = 0;
@@ -416,6 +468,7 @@ function nextLevel(summary) {
   tanks[0].y = support(115);
   tanks[1] = makeTank(875, '#ff927a', 127);
   tanks[1].hp = progression.cpuShield(level);
+  tanks[1].armor = tanks[1].armorMax = progression.cpuArmor(level);
   tanks[1].cash = progression.cpuCash(level);
   shells = [];
   burns = [];
@@ -435,7 +488,7 @@ function aimTarget(player) {
 function aimBot() {
   const bot = tanks[1];
   const player = tanks[0];
-  const defense = catalog[1][1].slice().reverse().find(item => canBuy(bot, item));
+  const defense = shieldFor(bot);
   if (defense) purchase(bot, defense);
   if (bot.fuel < 30) purchase(bot, catalog[2][1][0]);
   if (!bot.ammo.large && !bot.ammo.nuke) {
@@ -625,6 +678,15 @@ function drawTank(tank, index) {
   ctx.textAlign = 'center';
   ctx.fillStyle = color;
   ctx.fillText(index === 0 ? 'YOU' : 'CPU', 0, -57);
+  // Hull pips: one per tier, filled while the hull holds. Drawn only above tier 1, so a standard
+  // tank looks exactly as it always has, and the CPU's tiers are visible without the gauge.
+  // y = -77 keeps them clear of the 12px label, whose top edge is at about -69.
+  if (tank.armorMax > 1) {
+    for (let pip = 0; pip < tank.armorMax; pip++) {
+      ctx.fillStyle = pip < tank.armor ? color : '#9fb3b8';
+      ctx.fillRect(-(tank.armorMax * 8 - 2) / 2 + pip * 8, -77, 6, 5);
+    }
+  }
   if (active === index && alive && (phase === 'aim' || phase === 'bot')) {
     ctx.beginPath();
     ctx.moveTo(-5, -51);

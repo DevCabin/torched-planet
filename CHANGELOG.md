@@ -2,6 +2,25 @@
 
 All notable changes to this project are recorded here.
 
+## [Unreleased]
+
+### Added
+
+- **Hull upgrades under Defense: Tank II ($2000) and Tank III ($5000)**, worth 2 and 3 hull hit points. A hull point absorbs one hit — any shell — once the shield is gone, and the hull is repaired at the start of every duel, so the purchase lasts the run. Armour is a strict ladder (Tank III needs Tank II), and each tier recolours the chassis: **lime → amber → violet**.
+- **Hull pips** above each tank (one per tier, filled while the hull holds, at y = -77 so they clear the label), the tier in the SHIELD cell (`3 HP · III`), and a colour swatch on the armour buttons in the depot — the shop teaches the colour before you buy it.
+- **CPU hull tiers**, level-driven rather than bought: `progression.cpuArmor` gives the opponent 2 hull points from level 9 and 3 from level 16, a few levels behind the player's likely purchase arc so a paid upgrade stays an edge instead of being cancelled.
+- A `$40` payout and a `hull hit ×n` tag for a hit that strips a hull point without destroying the tank.
+
+### Changed
+
+- `blast()`'s lethal branch now spends a hull point instead of destroying outright. A standard tank carries `1/1`, so behaviour at tier 1 is unchanged — the original harness assertions still mean what they said.
+- The gauge's "empty bar means one clean hit destroys the tank" promise is now qualified: the enemy readout appends `· HULL n` from level 9, and `README.md` says *standard* tank. The gauge itself is untouched — hull is a hull, not a shield.
+- `aimBot()`'s defensive purchase moved into `shieldFor(tank)`, a pure helper that filters `!item.armor` so the CPU can never buy a tier that `makeTank()` would wipe next duel.
+
+### Fixed
+
+- `tools/drive.js` declared local `level`/`round` helpers that shadowed the game's numeric state; assigning to them threw *"Assignment to constant variable"*. Renamed `levelText`/`roundText`, which is what made the new armour assertions possible.
+
 ## [1.0.0] — 2026-11-09
 
 First public deployment: **https://torched-planet.vercel.app**. Everything below shipped in it.
