@@ -4,6 +4,12 @@ A turn-based artillery duel built with HTML, CSS, and vanilla JavaScript — an 
 
 Working on the code? [`PROJECT.md`](PROJECT.md) is the single source of truth — current state, architecture, the state model and phase machine, ballistics, wind, terrain carving, economy, the CPU search, the DOM contract, a decision log, step-by-step recipes, known traps and a roadmap.
 
+## Play
+
+**https://torched-planet.vercel.app**
+
+A desktop keyboard and a touch screen both work; turn the phone sideways for the full-height battlefield.
+
 ## Run locally
 
 Open `index.html` in a modern browser. You can also serve this directory with `python3 -m http.server 8000` and open http://localhost:8000.

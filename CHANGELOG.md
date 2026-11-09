@@ -2,10 +2,13 @@
 
 All notable changes to this project are recorded here.
 
-## [Unreleased]
+## [1.0.0] — 2026-11-09
+
+First public deployment: **https://torched-planet.vercel.app**. Everything below shipped in it.
 
 ### Added
 
+- **Live deployment** on Vercel — a static build of the repo root from `vercel.json` (no build step, no output directory). The GitHub repository is connected, so pushes to `main` redeploy automatically.
 - `HANDOFF.md`: session handoff — folder checklist, locked decisions, open questions, ordered next steps, verification recipe and known traps.
 - `tools/drive.js`: a headless smoke test driver that steps `update()` directly, so behaviour can be verified in a real browser without `requestAnimationFrame`.
 - Endless progression: the level counter never stops climbing, destroying the CPU deploys a new target with a `$250 × level` bank bonus, and shot rewards scale 30% per level against 20% price scaling.

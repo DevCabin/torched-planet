@@ -42,7 +42,7 @@ is the broken part.
 | Repo | `github.com/DevCabin/torched-planet` (public), branch `main` |
 | Stack | vanilla JS + canvas. No dependencies, no build step, no assets |
 | Size | `game.js` 756 lines · `index.html` 54 · `style.css` 101 |
-| Live URL | **none yet** — the Vercel deploy is the last unfinished launch step (§21) |
+| Live URL | **https://torched-planet.vercel.app** — static deploy of the repo root; pushes to `main` redeploy automatically |
 | Play locally | `open index.html` — that is a complete dev environment |
 
 **Always check the working tree before trusting this file.** If `git status` is dirty, read
@@ -57,6 +57,9 @@ open /Users/george/GITHUB/torched-planet/index.html
 # or
 python3 -m http.server 8000      # from the project folder, then http://localhost:8000
 ```
+
+Live build: **https://torched-planet.vercel.app** — the same files, served statically. It redeploys
+on every push to `main`, so the live game and `main` never drift.
 
 **A blank page is a script error, not a hosting problem.** Open DevTools; the console names the
 line. Then hard-refresh (`Cmd+Shift+R`), because `game.js` caches aggressively.
@@ -878,19 +881,17 @@ In rough priority order.
 
 1. **Verify and ship whatever is uncommitted.** If `git status` is dirty, run §2 before anything
    else. Nothing on disk is trusted until the harness is green.
-2. **Deploy to Vercel.** `vercel.json` is already correct (static, `framework: null`,
-   `outputDirectory: "."`) and the CLI is logged in as `devcabin` under `devcabins-projects`:
+2. ~~**Deploy to Vercel.**~~ **Done 2026-11-09** — live at **https://torched-planet.vercel.app**.
+   Linked as `devcabins-projects/torched-planet` with `vercel link --yes --project torched-planet
+   --scope devcabins-projects`, then `vercel --prod --yes`. The GitHub repository was connected
+   during the link, so pushes to `main` now deploy automatically. Verified serving the real build:
+   `/game.js` returns `200 application/javascript` at 27,727 bytes, identical to the local file.
+   The URL is recorded in `README.md`, in `CHANGELOG.md`, and on the repo homepage.
 
-   ```bash
-   vercel link --yes --project torched-planet
-   vercel --prod
-   ```
-
-   Then record the URL in `README.md`, in `CHANGELOG.md`, and on the repo:
-
-   ```bash
-   gh repo edit DevCabin/torched-planet --homepage https://torched-planet.vercel.app
-   ```
+   **Two static-host traps:** a missing or misnamed file is served as `index.html` with a `200`, so
+   an HTML content-type on `/game.js` is exactly the blank-page failure in §20.5 — check the MIME
+   type, not just the status. And `vercel link` writes a gitignored `.vercel/` directory; never
+   commit it.
 
 3. **Re-measure the §12 hit-rate table** on the current `/ 10` curve.
 4. **Persist the best level** with `localStorage` — recipe in §17.
