@@ -122,6 +122,10 @@ git add -A && git commit -m "Clear, small message" && git push
 
 Green means every entry `"pass":true` and `"errors":[]` on the `RESULT:` line.
 
+**Run it two or three times.** The map, the wind and the CPU's aim are all random, so one green run
+is weak evidence — a full run takes about half a second (§20.8 is what happens when a check leans on
+that randomness).
+
 **Why a harness instead of clicking:** `requestAnimationFrame` does not advance under
 `--virtual-time-budget`, so `tools/drive.js` calls `update(1/120)` in a loop instead. That
 makes the run deterministic and fast, and it has caught a startup crash, a self-kill and a
@@ -912,6 +916,12 @@ These were argued over. Don't undo them casually; each row carries the *why*.
 7. **Docs rot silently.** Three separate recipes and diagrams in this project described a
    `phase = 'over'` that no longer exists. When you change behaviour, grep the docs for the old
    name before you push.
+8. **Never assert on CPU marksmanship in the harness.** Two `tools/drive.js` checks quietly did,
+   and both flaked: the level-1 CPU connects rarely, and on a ridged map with a crater under the
+   player it may be *structurally* unable to land anything. If a test needs a tank destroyed, fire a
+   real shot and mark it destroyed — then let the genuine `finishShot()` path run. `node --check`
+   can't see this class of bug; only repeated runs can, so run the harness a few times when you
+   touch it.
 
 ---
 
