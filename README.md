@@ -2,6 +2,8 @@
 
 A turn-based artillery duel built with HTML, CSS, and vanilla JavaScript — an homage to Scorched Earth. Play as the left tank against a CPU opponent across randomized salt flats, hills, and city rooftops.
 
+Working on the code? [`DEVELOPERS.md`](DEVELOPERS.md) documents the architecture — state model, phase machine, ballistics, terrain carving, economy, the CPU search, input plumbing, the DOM contract, and step-by-step recipes for adding weapons, maps and HUD fields.
+
 ## Run locally
 
 Open `index.html` in a modern browser. You can also serve this directory with `python3 -m http.server 8000` and open http://localhost:8000.

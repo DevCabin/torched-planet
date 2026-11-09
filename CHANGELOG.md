@@ -9,6 +9,7 @@ All notable changes to this project are recorded here.
 - Endless progression: the level counter never stops climbing, destroying the CPU deploys a new target with a `$250 × level` bank bonus, and shot rewards scale 30% per level against 20% price scaling.
 - Shift fine aim, single-keypress 1% power nudges, and a last-shot reference tick on the power meter.
 - Terrain amplitude and rooftop heights swell with level.
+- `DEVELOPERS.md`: a full technical architecture reference for new contributors — state model, phase machine, ballistics, terrain carving, economy, CPU search, input plumbing, DOM contract, house rules, six recipes, known limitations and a glossary.
 
 ### Changed
 
