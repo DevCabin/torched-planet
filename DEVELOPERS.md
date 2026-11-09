@@ -35,6 +35,8 @@ browser is a complete, valid dev environment.**
 | `vercel.json` | Static host config | No build; output is the repo root |
 | `README.md` | Player-facing: controls, rules, how to run | |
 | `CHANGELOG.md` | Change log, newest first | Update for every significant change |
+| `HANDOFF.md` | Session handoff: current state, open questions, next steps | Read first when resuming |
+| `tools/drive.js` | Headless smoke test driver (§6 of HANDOFF) | Loaded by a generated `harness.html` |
 | `PLAN-*.md` | Design documents written *before* multi-step work | Historical intent, useful context |
 | `cline_instructions.md` | Working protocol for the AI assistant | Not part of the game |
 
