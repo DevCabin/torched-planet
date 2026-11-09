@@ -22,7 +22,7 @@ worth several pixels of impact drift. Fix in three layers:
 `reset()` zeroed everything and the first kill ended the match permanently.
 
 - `progression` config object holds every dial in one place
-  (`reward`, `price`, `aimError`, `cpuShield`, `cpuCash`, `waveBonus`).
+  (`reward`, `price`, `skill`, `flub`, `spread`, `cpuShield`, `cpuCash`, `waveBonus`).
 - Rewards ×`1 + .30(level-1)`; shop prices ×`1 + .20(level-1)` — rewards outpace prices so
   the bank visibly swells.
 - Wave bonus `$250 × level` on each CPU destroyed.

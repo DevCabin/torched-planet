@@ -317,7 +317,9 @@ not inside the rules.
 const progression = {
   reward:    level => 1 + .3 * (level - 1),          // shot payouts grow 30%/level
   price:     level => 1 + .2 * (level - 1),          // shop prices grow 20%/level
-  aimError:  level => Math.max(42, 150 - 18*level),  // CPU target jitter, floor 42
+  skill:     level => Math.min(1, (level - 1) / 7),      // marksmanship 0 → 1 by level 8
+  flub:      level => .5 * (1 - progression.skill(level)), // chance of a wild shot
+  spread:    level => 210 - 180 * progression.skill(level), // aim jitter in px
   cpuShield: level => Math.min(5, level - 1),        // free shield HP for the CPU
   cpuCash:   level => 40 + 45 * (level - 1),         // CPU starting wallet
   waveBonus: level => 250 * level                    // paid when the CPU is destroyed
@@ -353,9 +355,21 @@ over on purpose; the run ends only when the **player** is destroyed.
 
 1. **Shop** — buys the most expensive affordable shield (`catalog[1][1]` reversed), a fuel
    can if below 30, and a special weapon if it has no Large/Nuke left.
-2. **Pick a weapon** — first available of `['nuke','large','napalm','spread','basic']`.
-3. **Pick a target** — `player.x + (random - .5) * aimError(round)`. This jitter *is* the
-   difficulty: the CPU always aims perfectly at a slightly wrong place.
+2. **Pick a weapon** — Basic only at levels 1–2, then the first available of
+   `['nuke','large','napalm','spread','basic']`. Early levels therefore can't one-shot you
+   through splash.
+3. **Pick a target** — `aimTarget()` chooses a deliberately wrong point: with probability
+   `flub` it misses by 150–290 px, otherwise it jitters by `spread`. The CPU then aims
+   perfectly at *that* point, so the jitter is the whole difficulty curve. Measured over
+   4,000 samples per level, with the player at x = 115:
+
+   | Level | Mean miss | Inside a Basic blast (±30 px) |
+   | --- | --- | --- |
+   | 1 | 106 px | 14% |
+   | 2 | 93 px | 19% |
+   | 4 | 69 px | 33% |
+   | 6 | 38 px | 65% |
+   | 8 | 7 px | 100% |
 4. **Search** — 11 elevations (25…75, step 5) × 35 powers (32…100, step 2) = **385 candidate
    trajectories**. Each is simulated with the real `launch()` + `advance()` until it hits
    something, then scored by distance to the target (vertical error weighted 0.65). Hitting

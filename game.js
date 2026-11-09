@@ -34,7 +34,10 @@ const catalog = [
 const progression = {
   reward: level => 1 + .3 * (level - 1),
   price: level => 1 + .2 * (level - 1),
-  aimError: level => Math.max(42, 150 - 18 * level),
+  // Marksmanship: 0 at level 1 (sloppy) → 1 from level 8 onward (lethal).
+  skill: level => Math.min(1, (level - 1) / 7),
+  flub: level => .5 * (1 - progression.skill(level)),
+  spread: level => 210 - 180 * progression.skill(level),
   cpuShield: level => Math.min(5, level - 1),
   cpuCash: level => 40 + 45 * (level - 1),
   waveBonus: level => 250 * level
@@ -393,6 +396,13 @@ function nextWave(summary) {
   openShop('Target destroyed. Level ' + round + ' — bank bonus +$' + bonus + '.');
 }
 
+function aimTarget(player) {
+  const offset = Math.random() < progression.flub(round)
+    ? (150 + Math.random() * 140) * (Math.random() < .5 ? -1 : 1)
+    : (Math.random() - .5) * progression.spread(round);
+  return clamp(player.x + offset, 24, W - 24);
+}
+
 function aimBot() {
   const bot = tanks[1];
   const player = tanks[0];
@@ -403,8 +413,8 @@ function aimBot() {
     const special = catalog[0][1].find(item => canBuy(bot, item));
     if (special) purchase(bot, special);
   }
-  const id = ['nuke', 'large', 'napalm', 'spread', 'basic'].find(key => bot.ammo[key]);
-  const target = clamp(player.x + (Math.random() - .5) * progression.aimError(round), 18, W - 18);
+  const id = round < 3 ? 'basic' : ['nuke', 'large', 'napalm', 'spread', 'basic'].find(key => bot.ammo[key]);
+  const target = aimTarget(player);
   let best = { score: Infinity, angle: 130, power: 65 };
   for (let elevation = 25; elevation <= 75; elevation += 5) {
     const angle = player.x < bot.x ? 180 - elevation : elevation;

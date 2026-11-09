@@ -17,6 +17,7 @@ All notable changes to this project are recorded here.
 
 ### Changed
 
+- CPU marksmanship is a real curve now. Level 1 misses by ~106 px on average (about a 14% hit rate) and sticks to Basic shells; accuracy improves every level until it is lethal at level 8. This replaces the old flat jitter that connected roughly 70% of shots at level 1.
 - Power aim is no longer twitchy: the rate dropped from a fixed 48 points/second to a 5.6 → 16 points/second ramp over the first 0.65 s of a hold.
 - HUD now reports LEVEL and BANK with the live reward multiplier, and the shop header shows the level.
 - Renamed the game to **Torched Planet** (previously *Blastline*) across the browser tab title, the in-game header wordmark, and the README. The name carries the *Scorched Earth* homage used in the project description.
