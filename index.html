@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A turn-based artillery duel across destructible terrain.">
+<title>Torched Planet — Artillery Duel</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="game.js"></script>
+</head>
+<body>
+<main>
+<header><div><span class="eyebrow">FIELD SYSTEMS / ARTILLERY DUEL</span><h1>TORCHED <span>PLANET</span></h1></div><button id="reset">↻ New battlefield</button></header>
+<section class="hud" aria-label="Tank instruments">
+<div><small>SHOT POWER</small><strong id="power"></strong><span class="meter-wrap"><meter id="power-meter" min="0" max="100"></meter><i id="power-tick"></i></span></div>
+<div><small>BARREL ANGLE</small><strong id="angle"></strong><meter id="angle-meter" min="0" max="180"></meter></div>
+<div><small>FUEL</small><strong id="fuel"></strong><meter id="fuel-meter" min="0" max="100"></meter></div>
+<div><small>SHIELD</small><strong id="shield"></strong><meter id="shield-meter" min="0" max="5"></meter></div>
+<div><small>BANK</small><strong id="cash"></strong><small id="multiplier">1.0× REWARDS</small></div>
+</section>
+<section class="field" aria-label="Battlefield">
+<div class="fieldbar"><span id="map"></span><span id="turn"></span><span class="enemy" id="enemy"></span></div>
+<canvas id="battle" width="1000" height="520" aria-label="Two tanks on destructible terrain"></canvas>
+</section>
+<p class="status" id="status" role="status"></p>
+<section class="controls" aria-label="Tank controls">
+<div class="touch">
+<div class="drive"><button data-hold="z" aria-label="Drive left">L</button><button data-hold="x" aria-label="Drive right">R</button></div>
+<div class="joystick" id="joystick" aria-label="Drag joystick to aim and adjust power"><span class="up">▲</span><span class="left">◀</span><span class="right">▶</span><span class="down">▼</span><i></i></div>
+</div>
+<div class="keys"><small>FIELD CONTROLS</small><span>← → or A D aim · ↑ ↓ or W S power</span><span>Shift fine aim · tap for 1% steps</span><span>Z X drive · Space fire</span></div>
+<label>LOADED WEAPON<select id="weapon"></select></label>
+<button class="primary fire" id="fire">FIRE <span>↗</span></button>
+</section>
+</main>
+<dialog id="shop" aria-labelledby="shop-title">
+<div class="shophead"><div><span class="eyebrow" id="shop-turn"></span><h2 id="shop-title">Supply depot</h2></div><strong id="shop-cash"></strong></div>
+<p class="muted">Turn your shot rewards into shells, shields, and fuel.</p>
+<div class="catalog" id="catalog"></div>
+<p class="muted" id="shop-note" role="status">Select supplies or head straight to the field.</p>
+<button class="primary" id="deploy">DEPLOY TANK →</button>
+</dialog>
+</body>
+</html>

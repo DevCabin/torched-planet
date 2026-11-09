@@ -1,0 +1,31 @@
+# Torched Planet
+
+A turn-based artillery duel built with HTML, CSS, and vanilla JavaScript — an homage to Scorched Earth. Play as the left tank against a CPU opponent across randomized salt flats, hills, and city rooftops.
+
+## Run locally
+
+Open `index.html` in a modern browser. You can also serve this directory with `python3 -m http.server 8000` and open http://localhost:8000.
+
+## Controls
+
+| Action | Keyboard | Touch |
+| --- | --- | --- |
+| Aim turret | Left / Right or A / D | Drag joystick sideways |
+| Change power | Up / Down or W / S — hold to accelerate, tap for 1% steps | Drag joystick vertically |
+| Fine aim | Hold Shift while adjusting power | Drag joystick gently |
+| Move tank | Z / X | Hold L / R |
+| Fire | Space | Tap Fire |
+
+## Rules
+
+- Both tanks start with unlimited Basic shells, three Large shells, full fuel, and an empty wallet. A shop opens before every player turn. The CPU can spend its own earnings on supplies.
+- **Endless levels.** The level counter never stops climbing. Destroying the CPU tank deploys a fresh, better-equipped opponent on a new battlefield and pays a $250 × level bank bonus. Losing your tank ends the run and reports the level reached and the bank you finished with; New battlefield starts a fresh run.
+- **Rising bank.** Shot rewards scale 30% per level while shop prices scale 20% per level, so the wallet slowly outgrows the market. The CPU gains `level - 1` shield HP, a growing shopping allowance, and tighter aim each level, down to a floor of 42 units of error.
+- A direct Basic hit destroys an exposed tank. Shields absorb a hit using their remaining HP, and any excess damage on that hit is absorbed. Nuke and Napalm can also destroy an exposed tank with splash.
+- The same wallet acts as score and spending money. Earn $100 for destroying the opposing tank, $50 for a shield hit, $25 for a near miss, and $35 if an opponent survives a drop caused by your shot — each multiplied by the level reward rate shown in the HUD.
+- Fuel is spent by distance, with up to 45 battlefield units of travel per turn. A Fuel Can adds up to 45 percentage points. Craters can block travel, and drops never damage a tank.
+- The supply depot stocks Nuke ($160), 5 Spread ($85), Napalm ($105), Weak Shield (1 HP, $50), Medium Shield (3 HP, $115), Strong Shield (5 HP, $175), and Fuel Can ($35). These are base prices; the depot scales them 20% per level.
+
+## GitHub and Vercel
+
+Push the contents of this directory to a GitHub repository, then import that repository in Vercel. Keep the repository root as the project root. The included `vercel.json` configures a static deployment from that directory. There are no dependencies, build steps, or environment variables.
