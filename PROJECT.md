@@ -41,7 +41,7 @@ is the broken part.
 | --- | --- |
 | Repo | `github.com/DevCabin/torched-planet` (public), branch `main` |
 | Stack | vanilla JS + canvas. No dependencies, no build step, no assets |
-| Size | `game.js` 798 lines · `index.html` 54 · `style.css` 102 |
+| Size | `game.js` 903 lines · `index.html` 54 · `style.css` 102 |
 | Live URL | **https://torched-planet.vercel.app** — static deploy of the repo root; pushes to `main` redeploy automatically |
 | Play locally | `open index.html` — that is a complete dev environment |
 
@@ -126,6 +126,11 @@ Green means every entry `"pass":true` and `"errors":[]` on the `RESULT:` line.
 is weak evidence — a full run takes about half a second (§20.8 is what happens when a check leans on
 that randomness).
 
+The harness also covers rendering now: it calls `draw()` clean, then again with a shell and an
+explosion in flight, and asserts two consecutive draws are **pixel-identical** (the sky must not
+crawl). `requestAnimationFrame` never advances under `--virtual-time-budget`, so this is the only
+way the render path gets tested at all.
+
 **Why a harness instead of clicking:** `requestAnimationFrame` does not advance under
 `--virtual-time-budget`, so `tools/drive.js` calls `update(1/120)` in a loop instead. That
 makes the run deterministic and fast, and it has caught a startup crash, a self-kill and a
@@ -209,7 +214,9 @@ All module scope in `game.js`. No class, no store, no observer.
 | --- | --- | --- |
 | `terrain` | `number[]`, length `W` (1000) | Ground **height** (y) per pixel column. Lower value = higher ground |
 | `map` | `string` | `'Salt Flats' \| 'Iron Hills' \| 'Rooftop District'` |
-| `palette` | `[sky1, sky2, groundTop, groundEdge]` | Colours chosen per map |
+| `palette` | `{sky[3], star, ridge[2], ground[2], edge, body}` | Colours chosen per map — see §14 |
+| `stars` | `{x, y, size, bright}[]` | Starfield, rolled once per battlefield by `makeMap()` |
+| `celestial` | `{x, y, r, ring, craters[]}[]` | One or two planets/moons — see §14 |
 | `tanks` | `[player, cpu]` | Exactly two; index 0 is always you |
 | `shells` | `Shell[]` | Shells in flight; empty means no shot is airborne |
 | `effects` | `{x,y,radius,color,age}[]` | Explosion rings, self-expiring at `.58 s` |
@@ -397,9 +404,10 @@ Two accessors, and the difference matters:
 - `support(x)` → the **minimum** height over `x ± 14` — the highest ground under the tank's
   footprint, so a tank straddles a ridge instead of sinking into it.
 
-Rendering draws the array as a polyline, fills below it with a gradient, then clips and
-stipples texture inside the filled region — which is why strata look continuous even after
-craters are carved.
+Rendering draws the array as a polyline: the closed path is filled as the ground body, the same
+polyline is re-stroked inside a clip to lay a topsoil band that follows the contour, texture is
+clipped to the fill, and the rim is stroked last — which is why strata follow the surface even
+after craters are carved.
 
 **Carving** happens at the end of `blast()`. For each column within the radius:
 
@@ -649,18 +657,54 @@ Angle is a flat `53 °/s` and is intentionally untouched by the ramp.
 `draw()` is immediate-mode and stateless between frames — no offscreen buffers, no sprites, no
 images. Order:
 
-1. `drawBackdrop()` — sky gradient, sun, two parallax hill/skyline layers, grid
-2. `drawTerrain()` — surface polyline, gradient fill, clipped stipple texture, bedrock bar
-3. `drawTank()` per tank — shield ring, barrel, hull, wheels, `YOU`/`CPU` label, turn arrow
+1. `drawBackdrop()` — three sky bands, starfield, the celestial bodies, two parallax ridge layers
+2. `drawTerrain()` — surface polyline: ground body fill, clipped topsoil band, texture, bedrock bar,
+   rim
+3. `drawTank()` per tank — force-field box, barrel, hull, wheels, `YOU`/`CPU` label, hull pips, turn
+   arrow
 4. Shells and their 15-point trails
 5. Explosion rings from `effects`
 
-`drawTank()` uses `ctx.save()` → `translate(x, y)` → draw in **local coordinates** →
-`ctx.restore()`. Inside that transform the tank sits at the origin, so all the `roundRect` and
-wheel maths are local numbers.
+### The pixel grid
 
-The canvas is a fixed **1000 × 520** surface stretched to container width by CSS. All game
-coordinates are canvas units, so nothing in the render path deals in CSS pixels.
+The game is authored in a fixed **1000 × 520 logical space** — every radius, speed and position in
+`game.js` means that. The canvas itself is only `1/PIXEL` of that in each direction:
+
+```js
+const PIXEL = 2;                          // one art pixel = 2 logical units
+canvas.width = W / PIXEL;                 // 500
+canvas.height = H / PIXEL;                // 260
+ctx.imageSmoothingEnabled = false;
+ctx.setTransform(1 / PIXEL, 0, 0, 1 / PIXEL, 0, 0);
+```
+
+Everything then draws in the coordinates it always did, and the rasteriser quantises it — arcs
+become blocky, diagonals staircase — while CSS scales the result back up with
+`image-rendering: pixelated`. **Physics, terrain generation, radii and the CPU's search are
+untouched**; this is a transform, not a coordinate change. Raise `PIXEL` for chunkier art.
+
+**The one rule that follows:** nothing thinner than one art pixel survives. Any mark must be at least
+`PIXEL` logical units wide, so hairlines, 1 px stipples and 1.5 px rings all had to be re-sized when
+the grid came in. `PIXEL * 2` (4 logical px) is the safe default for a visible detail.
+
+`drawTank()` uses `ctx.save()` → `translate(x, y)` (snapped to the art grid) → draw in **local
+coordinates** → `ctx.restore()`. Inside that transform the tank sits at the origin, so all the hull,
+wheel and pip maths are local numbers.
+
+### The space backdrop
+
+`makeMap()` rolls the sky once per battlefield, alongside the terrain, and **never again during a
+frame** — `stars` and `celestial` are plain state, so the sky cannot shimmer while you aim (the
+harness asserts it is pixel-identical between consecutive draws).
+
+- `stars` — 96 entries of `{x, y, size, bright}`, sizes `PIXEL` or `PIXEL * 2`, drawn with
+  `globalAlpha` for depth.
+- `celestial` — **at least one** body, sometimes two. `makeCelestial()` places the main disc and
+  pushes a moon sideways off it half the time, clamping `y` so the disc is never cropped by the top
+  edge. Craters spread evenly around a ring with jitter; fully random angles clump into a blob.
+- `drawBody()` is a shaded disc, an offset lit disc on top (leaving a crescent), then craters
+  clipped to the limb, plus an optional ring ellipse. At this raster the arcs quantise into blocky
+  rings for free.
 
 **The enemy shield gauge is deliberately NOT drawn on the canvas.** It is a DOM overlay inside
 `.stage` (see §15): `draw()` must stay a pure function of state, and canvas painting at
@@ -818,11 +862,13 @@ all read from that table.
 ### Add a map
 
 1. `makeMap()` — add the name to the array and give it a terrain formula.
-2. `palette` — add a four-colour entry keyed by the same name (sky top, sky bottom, ground
-   top, ground edge).
+2. `palette` — add an entry keyed by the same name: `sky` (three bands, top to horizon), `star`,
+   `ridge` (two parallax depths), `ground` (topsoil, deep), `edge` (the surface rim) and `body`
+   (planet `face`, `shade`, `crater`, `ring`).
 3. `drawBackdrop()` — optionally branch the skyline the way `Rooftop District` does.
 
-**Trap:** a map name with no `palette` entry leaves `palette` undefined and blanks the canvas.
+**Trap:** a map name with no `palette` entry leaves `palette` undefined and blanks the canvas. Since
+the sky is generated in `makeMap()` too, a new map also gets its own stars and planets for free.
 
 ### Add a HUD field
 
@@ -882,6 +928,12 @@ These were argued over. Don't undo them casually; each row carries the *why*.
 | **The hull is repaired every duel** | Bank and ammo carry over between duels, so a one-off $5000 purchase must too — otherwise it is a per-duel rental and nobody buys it. |
 | **The CPU earns hull tiers, never buys them** | `progression.cpuArmor` trails the player's arc (level 9 → 2, level 16 → 3), so a bought upgrade stays an edge. `aimBot()` must never purchase one: `makeTank()` wipes the CPU every duel, so it would spend thousands on a reset. |
 | **Hull pips on the canvas, hull count in `#enemy`** | The gauge keeps exactly one meaning (shield), `draw()` stays a pure function of state, and the crew can read a hull where the shells actually land. |
+| **The pixel grid is a transform, not a rescale** | `PIXEL` shrinks the raster while every tuned number stays in the 1000 × 520 logical space, so physics, blast radii and the CPU's 385-shot search are untouched. The art quantises for free. |
+| **`PIXEL = 2` (500 × 260)** | 3 makes the 32 px tank a ~10-pixel blob; 2 keeps it a readable 16-pixel sprite. The dial is one constant. |
+| **Nothing thinner than one art pixel** | A 1 px stipple or a 1.5 px ring simply disappears at this raster, so every detail is sized in `PIXEL` multiples. Standing rule for any new art. |
+| **The sky is state, rolled once per battlefield** | `stars` and `celestial` are generated in `makeMap()`, not in `draw()`. Drawing them from `Math.random()` would make the sky crawl while you aim, so the harness asserts two consecutive frames are pixel-identical. |
+| **No pixel webfont** | A pixel typeface would be an asset, and the house rule is no assets and no build step; system monospace at chunky sizes carries it. |
+| **Square chrome, flat fills** | Radius 0, 2 px borders and no gradients — a gradient bands anyway at this raster, so the bands are chosen in the palette rather than left to happen. |
 | **Touch controls are buttons, not a joystick** | `[data-hold]` buttons write the same logical keys the keyboard does, so one `held` map and one expression in `update()` serve both. The joystick needed `moveStick()`, `stickX`, `stickY` and a `getBoundingClientRect()` read to emulate that — and it still could not step in exact units. |
 | **A tap steps 1 %, a hold ramps** | Replaces "drag gently": precision now comes from discrete steps rather than from thumb steadiness, on both input methods. This is why `nudge()` handles angle as well as power. |
 | **Split thumbs: aim/power left, drive right** | The old joystick put four actions under one thumb. Left thumb aims and sets power; right thumb drives and fires. Drive is stacked *above* FIRE rather than beside it — a side-by-side row cost 58 px of battlefield width and put a fuel-burning action against the fire button. |
@@ -902,7 +954,8 @@ These were argued over. Don't undo them casually; each row carries the *why*.
   Tank III in one shot. That is the same exposure that killed you outright before hull points
   existed, now priced in hit points instead of a duel.
 - **The CPU search is synchronous** (385 simulated shots in a single tick).
-- **The canvas is not DPR-scaled**, so it looks soft on high-density displays.
+- **The canvas is not DPR-scaled** — instead it is rendered at `1/PIXEL` resolution and upscaled with
+  `image-rendering: pixelated`, so it is deliberately blocky rather than soft (§14).
 - **No audio.**
 - **Napalm splash never carves** (`carve = false`), so fires burn on top of terrain.
 - **The heightmap cannot represent caves**; blasts only carve when they span the surface.
@@ -968,8 +1021,8 @@ In rough priority order.
 
 3. **Re-measure the §12 hit-rate table** on the current `/ 10` curve.
 4. **Persist the best level** with `localStorage` — recipe in §17.
-5. **Polish backlog** (pick, don't batch): DPR-scale the canvas (soft on retina), sound, CPU
-   remembering your last position.
+5. **Polish backlog** (pick, don't batch): sound, CPU remembering your last position. ~~DPR-scale the
+   canvas~~ — superseded by the pixel grid (§14), which is deliberately blocky instead.
 
 ---
 

@@ -5,8 +5,17 @@ const canvas = byId('battle');
 const ctx = canvas.getContext('2d');
 const shop = byId('shop');
 const weaponSelect = byId('weapon');
-const W = canvas.width;
-const H = canvas.height;
+// Everything in this file is authored in a fixed 1000 × 520 logical space — every radius, speed and
+// position below means that. The canvas itself is 1/PIXEL of that in each direction and CSS scales it
+// back up with nearest-neighbour, so the whole render quantises to a visible pixel grid. Raise PIXEL
+// for chunkier art; nothing outside this block needs to know.
+const PIXEL = 2;
+const W = 1000;
+const H = 520;
+canvas.width = W / PIXEL;
+canvas.height = H / PIXEL;
+ctx.imageSmoothingEnabled = false;
+ctx.setTransform(1 / PIXEL, 0, 0, 1 / PIXEL, 0, 0);
 const BEDROCK = H - 24;
 const GRAVITY = 205;
 const WIND_MAX = 14;      // px/s² — the strongest wind a duel can roll (deliberately mild)
@@ -81,7 +90,7 @@ function clearControls() {
   fineAim = false;
   powerHold = 0;
 }
-let terrain, map, round, level, wind, tanks, active, phase, shells, effects, burns, settling, botDelay, report, status, palette;
+let terrain, map, round, level, wind, tanks, active, phase, shells, effects, burns, settling, botDelay, report, status, palette, stars, celestial;
 let last = 0;
 let previousSummary = '';
 let accumulator = 0;
@@ -96,15 +105,74 @@ function makeMap() {
   const levelNow = level || 1;
   const swell = 1 + Math.min(.5, (levelNow - 1) * .06);
   const buildings = Array.from({ length: 12 }, () => 235 + Math.random() * (160 + Math.min(70, (levelNow - 1) * 12)));
+  // Space palettes: three hard sky bands (a smooth gradient bands anyway at a 2 px raster, so these
+  // are chosen deliberately), plus the colours each map's celestial bodies are drawn from.
   palette = {
-    'Salt Flats': ['#192c34', '#497079', '#536052', '#b3b691'],
-    'Iron Hills': ['#242c3d', '#6a6467', '#525d55', '#a4b693'],
-    'Rooftop District': ['#192634', '#475c70', '#3e515a', '#91a7a7']
+    'Salt Flats': {
+      sky: ['#080d18', '#101a2e', '#1b2a45'], star: '#dfe9ff',
+      ridge: ['#16223a', '#1f2f4c'], ground: ['#4d5a63', '#2b3540'], edge: '#c8cdb2',
+      body: { face: '#cfd8e8', shade: '#7c8aa6', crater: '#5b6880', ring: '#8fa1c4' }
+    },
+    'Iron Hills': {
+      sky: ['#0d0a14', '#1a1220', '#2b1a26'], star: '#ffe9d6',
+      ridge: ['#241826', '#33202c'], ground: ['#5c4840', '#312825'], edge: '#c9a98b',
+      body: { face: '#d8b48c', shade: '#8a6a4e', crater: '#6b4f3a', ring: '#b08a63' }
+    },
+    'Rooftop District': {
+      sky: ['#07101a', '#0e1d2c', '#182c3e'], star: '#d8f0ff',
+      ridge: ['#132433', '#1d3345'], ground: ['#45535f', '#28323b'], edge: '#9fb2bb',
+      body: { face: '#a8d8e8', shade: '#5f8fa6', crater: '#456f86', ring: '#7fb4c9' }
+    }
   }[map];
+  // Sky furniture is rolled once per battlefield and never again, so stars cannot shimmer between
+  // frames while you are lining up a shot.
+  stars = Array.from({ length: 96 }, () => ({
+    x: Math.floor(Math.random() * W),
+    y: Math.floor(Math.random() * 330),
+    size: Math.random() < .84 ? PIXEL : PIXEL * 2,
+    bright: .30 + Math.random() * .70
+  }));
+  celestial = makeCelestial();
   terrain = Array.from({ length: W }, (_, x) => {
     if (map === 'Rooftop District') return buildings[Math.floor(x * buildings.length / W)];
     if (map === 'Iron Hills') return 353 + Math.sin(x / 96 + offset) * 64 * swell + Math.sin(x / 43 + offset) * 17 * swell;
     return 365 + Math.sin(x / 175 + offset) * 14 + Math.sin(x / 77) * 4;
+  });
+}
+
+// At least one body per battlefield, sometimes two. Slots stay clear of the enemy gauge on the right
+// edge and of the tank labels, and the second body is pushed sideways so the pair never overlap.
+function makeCelestial() {
+  const bodies = [];
+  const main = { x: 190 + Math.random() * 520, y: 62 + Math.random() * 74, r: 60 + Math.random() * 34 };
+  main.y = Math.max(main.y, main.r + 14);   // keep the whole disc in frame rather than cropping its top
+  main.ring = Math.random() < .45;
+  main.craters = cratersFor(main);
+  bodies.push(main);
+  if (Math.random() < .5) {
+    const moon = {
+      x: clamp(main.x + (Math.random() < .5 ? -1 : 1) * (170 + Math.random() * 150), 60, W - 170),
+      y: 38 + Math.random() * 74, r: 18 + Math.random() * 16, ring: false
+    };
+    moon.craters = cratersFor(moon);
+    bodies.push(moon);
+  }
+  return bodies;
+}
+
+// Craters are stored in logical coordinates, then clipped to the disc when drawn. Angles are spread
+// evenly with jitter rather than fully random, which otherwise lands two or three on top of each
+// other and reads as one blob.
+function cratersFor(body) {
+  const count = 2 + Math.floor(Math.random() * 4);
+  return Array.from({ length: count }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2 + (Math.random() - .5) * .8;
+    const distance = body.r * (.25 + Math.random() * .5);
+    return {
+      x: body.x + Math.cos(angle) * distance,
+      y: body.y + Math.sin(angle) * distance,
+      r: body.r * (.08 + Math.random() * .12)
+    };
   });
 }
 
@@ -570,58 +638,91 @@ function update(dt) {
 }
 
 function drawBackdrop() {
-  const sky = ctx.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, palette[0]);
-  sky.addColorStop(1, palette[1]);
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#ffe5b729';
-  ctx.beginPath();
-  ctx.arc(745, 135, 67, 0, Math.PI * 2);
-  ctx.fill();
+  // Three hard bands instead of a vertical gradient. At a 2 px raster a gradient steps anyway; this
+  // way the steps are chosen rather than accidental.
+  const band = Math.ceil(H / palette.sky.length);
+  palette.sky.forEach((color, index) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, index * band, W, index === palette.sky.length - 1 ? H - index * band : band);
+  });
+  for (const star of stars) {
+    ctx.globalAlpha = star.bright;
+    ctx.fillStyle = palette.star;
+    ctx.fillRect(star.x, star.y, star.size, star.size);
+  }
+  ctx.globalAlpha = 1;
+  for (const body of celestial) drawBody(body);
   for (let layer = 0; layer < 2; layer++) {
-    ctx.fillStyle = layer ? '#17252d65' : '#23343b45';
+    ctx.fillStyle = palette.ridge[layer];
     ctx.beginPath();
     ctx.moveTo(0, H);
     for (let x = 0; x <= W; x += 5) {
-      const hill = 276 + layer * 39 + 26 * Math.sin(x / 71 + layer) + 17 * Math.sin(x / 34 + layer * 3);
-      const skyline = 237 + layer * 54 + Math.floor((Math.sin(Math.floor(x / 35) * 14.6 + layer) + 1) * 29);
+      // Kept low and shallow: these are the planet's distant ridges, and the sky is the point now.
+      const hill = 306 + layer * 34 + 22 * Math.sin(x / 71 + layer) + 14 * Math.sin(x / 34 + layer * 3);
+      const skyline = 262 + layer * 46 + Math.floor((Math.sin(Math.floor(x / 35) * 14.6 + layer) + 1) * 27);
       ctx.lineTo(x, map === 'Rooftop District' ? skyline : hill);
     }
     ctx.lineTo(W, H);
     ctx.fill();
   }
-  ctx.strokeStyle = '#c3d5d418';
+}
+
+// A body is a shaded disc, an offset lit disc on top of it (which leaves a crescent), and craters
+// clipped to the limb. The arcs quantise into blocky rings for free at this raster.
+function drawBody(body) {
+  const tone = palette.body;
+  if (body.ring) {
+    ctx.strokeStyle = tone.ring;
+    ctx.lineWidth = PIXEL * 2;
+    ctx.beginPath();
+    ctx.ellipse(body.x, body.y, body.r * 1.6, body.r * .32, -.3, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = tone.shade;
   ctx.beginPath();
-  for (let x = 25; x < W; x += 50) {
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, H);
+  ctx.arc(body.x, body.y, body.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = tone.face;
+  ctx.beginPath();
+  ctx.arc(body.x - body.r * .17, body.y - body.r * .17, body.r * .92, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(body.x, body.y, body.r * .97, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = tone.crater;
+  for (const crater of body.craters) {
+    ctx.beginPath();
+    ctx.arc(crater.x, crater.y, crater.r, 0, Math.PI * 2);
+    ctx.fill();
   }
-  for (let y = 25; y < H; y += 50) {
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-  }
-  ctx.stroke();
+  ctx.restore();
 }
 
 function drawTerrain() {
-  const strata = ctx.createLinearGradient(0, 235, 0, H);
-  strata.addColorStop(0, palette[2]);
-  strata.addColorStop(1, '#172326');
+  // One polyline, used three times: closed for the body fill, clipped for the topsoil band, and
+  // stroked again for the rim. Stroking rather than layering rectangles keeps the strata following
+  // the contour instead of cutting a hard horizontal line through it.
+  const surface = () => {
+    ctx.beginPath();
+    ctx.moveTo(0, terrain[0]);
+    for (let x = 1; x < W; x++) ctx.lineTo(x, terrain[x]);
+  };
   ctx.beginPath();
   ctx.moveTo(0, terrain[0]);
-  terrain.forEach((height, x) => ctx.lineTo(x, height));
-  ctx.lineTo(W, terrain[W - 1]);
-  ctx.strokeStyle = palette[3];
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  for (let x = 1; x < W; x++) ctx.lineTo(x, terrain[x]);
   ctx.lineTo(W, H);
   ctx.lineTo(0, H);
   ctx.closePath();
-  ctx.fillStyle = strata;
+  ctx.fillStyle = palette.ground[1];
   ctx.fill();
   ctx.save();
   ctx.clip();
+  surface();
+  ctx.strokeStyle = palette.ground[0];
+  ctx.lineWidth = 34;
+  ctx.lineJoin = 'bevel';
+  ctx.stroke();
   if (map === 'Rooftop District') {
     for (let x = 13; x < W; x += 21) {
       for (let y = 250; y < BEDROCK; y += 19) {
@@ -631,64 +732,68 @@ function drawTerrain() {
       }
     }
   } else {
-    ctx.fillStyle = '#d2cfab23';
+    ctx.fillStyle = '#d2cfab3d';
     for (let x = 6; x < W; x += 13) {
       for (let y = 250 + x % 19; y < BEDROCK; y += 13) {
-        if ((x * y) % 7 < 3) ctx.fillRect(x, y, 4, 1);
+        // 8 × 2: at PIXEL = 2 that is a 4 × 1 block, the smallest mark that survives the raster.
+        if ((x * y) % 7 < 3) ctx.fillRect(x, y, 8, 2);
       }
     }
   }
-  ctx.fillStyle = '#131d20';
+  ctx.fillStyle = '#0b1116';
   ctx.fillRect(0, BEDROCK, W, H - BEDROCK);
   ctx.restore();
+  surface();
+  ctx.strokeStyle = palette.edge;
+  ctx.lineWidth = PIXEL * 2;
+  ctx.lineJoin = 'bevel';
+  ctx.stroke();
 }
 
 function drawTank(tank, index) {
   const { x, y, color, alive, hp } = tank;
   ctx.save();
-  ctx.translate(x, y);
+  // Snap to the art-pixel grid: a tank mid-drive then steps between pixel columns instead of
+  // shimmering inside one.
+  ctx.translate(Math.round(x / PIXEL) * PIXEL, Math.round(y / PIXEL) * PIXEL);
   ctx.globalAlpha = alive ? 1 : .55;
   if (alive && hp) {
+    // Shield: a chunky force-field box. A 2.5 px ring thinned to a ragged 1.25 px line at this
+    // raster, and a box reads better in the same visual language as the rest of the art.
     ctx.strokeStyle = '#86e5ff';
-    ctx.fillStyle = '#86e5ff24';
-    ctx.lineWidth = 1 + hp * .3;
-    ctx.beginPath();
-    ctx.arc(0, -12, 24, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    ctx.lineWidth = PIXEL * 2;
+    ctx.strokeRect(-30, -42, 60, 50);
+    ctx.fillStyle = '#86e5ff';
+    for (const [cornerX, cornerY] of [[-30, -42], [24, -42], [-30, 2], [24, 2]]) {
+      ctx.fillRect(cornerX, cornerY, PIXEL * 3, PIXEL * 3);
+    }
   }
   ctx.strokeStyle = alive ? color : '#b29482';
-  ctx.lineCap = 'round';
+  ctx.lineCap = 'square';
   ctx.lineWidth = 6;
   ctx.beginPath();
-  ctx.moveTo(0, -15);
+  ctx.moveTo(0, -14);
   const end = muzzle(tank);
   ctx.lineTo(end.x - x, end.y - y);
   ctx.stroke();
   ctx.fillStyle = '#141e22';
-  ctx.beginPath();
-  ctx.roundRect(-19, -9, 38, 9, 4);
-  ctx.fill();
+  ctx.fillRect(-20, -10, 40, 10);
+  ctx.fillStyle = '#80908a';
+  for (let wheel = -14; wheel <= 14; wheel += 7) ctx.fillRect(wheel, -6, 4, 2);
   ctx.fillStyle = alive ? color : '#a79787';
-  ctx.beginPath();
-  ctx.roundRect(-16, -15, 32, 9, 2);
-  ctx.roundRect(-8, -20, 16, 8, 3);
-  ctx.fill();
-  for (let wheel = -13; wheel <= 13; wheel += 6) {
-    ctx.fillStyle = '#80908a';
-    ctx.fillRect(wheel, -5, 3, 2);
-  }
-  ctx.font = 'bold 12px monospace';
+  ctx.fillRect(-16, -17, 32, 8);
+  ctx.fillRect(-8, -22, 16, 6);
+  ctx.font = 'bold 16px monospace';
   ctx.textAlign = 'center';
   ctx.fillStyle = color;
-  ctx.fillText(index === 0 ? 'YOU' : 'CPU', 0, -57);
+  ctx.fillText(index === 0 ? 'YOU' : 'CPU', 0, -58);
   // Hull pips: one per tier, filled while the hull holds. Drawn only above tier 1, so a standard
   // tank looks exactly as it always has, and the CPU's tiers are visible without the gauge.
-  // y = -77 keeps them clear of the 12px label, whose top edge is at about -69.
+  // y = -84 clears the 16px label, whose top edge sits at about -70.
   if (tank.armorMax > 1) {
     for (let pip = 0; pip < tank.armorMax; pip++) {
       ctx.fillStyle = pip < tank.armor ? color : '#9fb3b8';
-      ctx.fillRect(-(tank.armorMax * 8 - 2) / 2 + pip * 8, -77, 6, 5);
+      ctx.fillRect(-(tank.armorMax * 10 - 2) / 2 + pip * 10, -84, 8, 6);
     }
   }
   if (active === index && alive && (phase === 'aim' || phase === 'bot')) {
@@ -710,7 +815,7 @@ function draw() {
     ctx.fillStyle = color;
     shell.trail.forEach(([x, y], index) => {
       ctx.globalAlpha = (index + 1) / shell.trail.length * .48;
-      ctx.fillRect(x, y, 3, 3);
+      ctx.fillRect(x, y, PIXEL * 2, PIXEL * 2);
     });
     ctx.globalAlpha = 1;
     ctx.beginPath();
@@ -726,7 +831,7 @@ function draw() {
     ctx.fill();
     ctx.globalAlpha = 1 - progress;
     ctx.strokeStyle = effect.color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = PIXEL * 2;
     ctx.stroke();
     ctx.globalAlpha = 1;
   }

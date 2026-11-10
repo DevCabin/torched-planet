@@ -201,6 +201,31 @@
       check('holding an aim button sweeps the barrel', swept > 95, '91 → ' + swept.toFixed(1));
       run(60);
       check('releasing the button stops the sweep', tanks[0].angle === swept, swept + ' → ' + tanks[0].angle);
+      // ── Rendering ───────────────────────────────────────────────────────────────────────────
+      // The suite never called draw() before: requestAnimationFrame does not advance under
+      // --virtual-time-budget, so the entire render path went untested. The pixel pass changes
+      // nothing else, so it all needs covering here.
+      const renders = () => {
+        try { draw(); return null; } catch (error) { return error.message; }
+      };
+      const renderError = renders();
+      check('draw() runs without throwing', renderError === null, renderError || 'ok');
+
+      // The starfield and the planets are rolled once per battlefield, never per frame. Two draws in
+      // a row must therefore be pixel-identical, or the sky would shimmer while you aim.
+      draw();
+      const firstFrame = canvas.toDataURL();
+      draw();
+      check('the sky is stable between frames', canvas.toDataURL() === firstFrame, 'identical');
+
+      // Explosions and shells have their own draw paths; exercise both.
+      effects.push({ x: 500, y: 300, radius: 40, color: '#ffdf91', age: .2 });
+      shells = [Object.assign(launch(tanks[0], 45, 60, 'basic'), { trail: [[100, 120], [108, 116]] })];
+      const busyError = renders();
+      effects.pop();
+      shells = [];
+      check('draw() renders shells and explosions', busyError === null, busyError || 'ok');
+
       check('no uncaught errors', errors.length === 0, errors.join(' | ') || 'none');
     } catch (error) {
       errors.push(error.message);
