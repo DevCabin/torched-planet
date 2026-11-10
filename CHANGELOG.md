@@ -6,6 +6,8 @@ All notable changes to this project are recorded here.
 
 ### Added
 
+- **A power gauge on your side of the battlefield.** The left edge now carries the mirror of the enemy shield gauge: a lime fill for your current shot power, a red line at the power of your last shot, and the number above. Because it is `.gauge` with a `.mine` modifier, both bars share one set of rules and scale together at every breakpoint.
+- **Fullscreen**, where the browser allows it: a **⛶** button in the header, plus a second one at the top of the right rail in the landscape layout — the header is hidden there, and that is exactly where a phone most wants the browser chrome gone. Both are removed on platforms without the Fullscreen API (iOS Safari) rather than left as dead controls, and any rejection is swallowed so a missing user gesture cannot break the frame loop.
 - **A pixel-art look.** The canvas now renders into a **500 × 260** raster — a quarter of the logical surface — which CSS upscales with `image-rendering: pixelated`, so arcs go blocky, diagonals staircase and every gradient steps. `PIXEL = 2` is the dial. Crucially this is a **transform, not a rescale**: `W`/`H` stay 1000 × 520, so physics, blast radii, terrain generation and the CPU's 385-shot search are byte-for-byte unchanged.
 - **A space backdrop.** Every battlefield now has a starfield (96 seeded stars) and **at least one planet or moon**, sometimes two — blocky discs with a shaded crescent, craters and an optional ring, coloured per map. In their place: a gradient sky, a sun blob and a hairline grid.
 - Square chrome: border radii to 0, 2 px borders, flat fills instead of gradients, and a two-layer bevel on the primary buttons.

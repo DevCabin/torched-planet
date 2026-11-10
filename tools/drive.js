@@ -201,6 +201,25 @@
       check('holding an aim button sweeps the barrel', swept > 95, '91 → ' + swept.toFixed(1));
       run(60);
       check('releasing the button stops the sweep', tanks[0].angle === swept, swept + ' → ' + tanks[0].angle);
+      // ── Player power gauge and fullscreen ───────────────────────────────────────────────────
+      tanks[0].power = 72;
+      lastPower = 61;
+      updateHud();
+      check('the battlefield power gauge mirrors the HUD',
+        $('power-gauge').textContent === '72' && $('power-fill').style.getPropertyValue('--level') === '72%',
+        $('power-gauge').textContent + ' / ' + $('power-fill').style.getPropertyValue('--level'));
+      check('the power gauge marks the last shot',
+        $('power-mark').style.getPropertyValue('--at') === '61%', $('power-mark').style.getPropertyValue('--at'));
+
+      // Two buttons, one handler: header (desktop, portrait) and right rail (landscape immersive).
+      const fullscreenSupported = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+      check('the fullscreen controls match platform support',
+        document.querySelectorAll('.fs').length === (fullscreenSupported ? 2 : 0),
+        'supported ' + fullscreenSupported + ', controls ' + document.querySelectorAll('.fs').length);
+      let fullscreenThrew = null;
+      try { toggleFullscreen(); } catch (error) { fullscreenThrew = error.message; }
+      check('toggling fullscreen cannot throw', fullscreenThrew === null, fullscreenThrew || 'ok');
+
       // ── Rendering ───────────────────────────────────────────────────────────────────────────
       // The suite never called draw() before: requestAnimationFrame does not advance under
       // --virtual-time-budget, so the entire render path went untested. The pixel pass changes

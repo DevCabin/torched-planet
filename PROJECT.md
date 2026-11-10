@@ -41,7 +41,7 @@ is the broken part.
 | --- | --- |
 | Repo | `github.com/DevCabin/torched-planet` (public), branch `main` |
 | Stack | vanilla JS + canvas. No dependencies, no build step, no assets |
-| Size | `game.js` 903 lines · `index.html` 54 · `style.css` 102 |
+| Size | `game.js` 943 lines · `index.html` 60 · `style.css` 112 |
 | Live URL | **https://torched-planet.vercel.app** — static deploy of the repo root; pushes to `main` redeploy automatically |
 | Play locally | `open index.html` — that is a complete dev environment |
 
@@ -728,6 +728,8 @@ each:
 | `enemy` | `updateHud()` | `CPU / 3 HP`, `NO SHIELD`, `CPU / DOWN`, plus `· HULL n` from level 9 |
 | `wind` | `updateHud()` | `WIND ▶ 12` / `WIND ◀ 7` / `WIND · CALM` |
 | `gauge-hp`, `gauge-hit` | `updateHud()` | Enemy shield HP, and the loaded weapon's damage |
+| `power-gauge`, `power-fill`, `power-mark` | `updateHud()` | Your power gauge: number, fill (`--level`), last-shot mark (`--at`) |
+| `fullscreen`, `fullscreen-rail` | `game.js` handlers | Fullscreen toggles — removed entirely when the platform has no Fullscreen API |
 | `gauge-fill`, `gauge-threat` | `updateHud()` | Gauge geometry via `--level`, `--from`, `--size` |
 | `map` | `reset()`, `nextLevel()` | Map name |
 | `status` | `setStatus()` | The one-line narration |
@@ -763,10 +765,17 @@ overlay is positioned against the canvas box, not against the field bar or a str
   learns "1 damage, nothing to absorb it" before shields appear at level 2.
 - `.fieldbar` gets `flex-wrap: wrap` at ≤520 px because `WIND` made it a four-item row.
 
+**Your own gauge is the mirror of it.** `.gauge.mine` sits on the **left** edge and reads **shot
+power** rather than shield: the lime fill is your current power, the red line is the power of your
+last shot (the same `lastPower` the HUD tick uses) and `#power-gauge` carries the number. It exists
+because the HUD's power row is one thin horizontal bar among four others — this one sits where you
+are actually looking, beside your own tank. Same markup shape: `.mine` flips `right` to `left` and one
+rule swaps the fill colour, so both bars scale together at every breakpoint.
+
 **Hull points are deliberately not on this bar.** The gauge answers one question — how much shield
 is left and how much of it a shot strips — so putting a hull stat on it would blunt that. Hull is
-drawn instead as pips above each tank in `drawTank()` (only when `armorMax > 1`, at y = -77 so they
-clear the 12 px label), with the remaining count in the `#enemy` readout and the tier in the SHIELD
+drawn instead as pips above each tank in `drawTank()` (only when `armorMax > 1`, at y = -84 so they
+clear the 16 px label), with the remaining count in the `#enemy` readout and the tier in the SHIELD
 cell. The gauge's "empty bar = one hit kills" promise therefore survives as "…unless the tank has
 hull points", which `#enemy` spells out.
 
@@ -797,6 +806,9 @@ The immersive grid, gated on
   **No DOM restructuring, no JavaScript.** `.touch{display:contents}` does the same one level down,
   so `.pad` and `.drive` can claim **different** rails — aim and power on the left, drive on the
   right — while portrait still stacks them together.
+- **The header is hidden here**, so the fullscreen toggle (`.rail-only`) appears at the top of
+  `right1`, above the bottom-aligned weapon picker that already owns that row. One shared handler
+  drives both buttons; see §18.
 - The rails exist because the tanks sit at x = 115 and x = 875 — exactly where a thumb rests on a
   thumbstick or a FIRE button. Rails also buy vertical space, the scarce axis on a
   phone: **~286 px of battlefield versus ~176 px** with a bottom control bar.
@@ -937,6 +949,8 @@ These were argued over. Don't undo them casually; each row carries the *why*.
 | **Touch controls are buttons, not a joystick** | `[data-hold]` buttons write the same logical keys the keyboard does, so one `held` map and one expression in `update()` serve both. The joystick needed `moveStick()`, `stickX`, `stickY` and a `getBoundingClientRect()` read to emulate that — and it still could not step in exact units. |
 | **A tap steps 1 %, a hold ramps** | Replaces "drag gently": precision now comes from discrete steps rather than from thumb steadiness, on both input methods. This is why `nudge()` handles angle as well as power. |
 | **Split thumbs: aim/power left, drive right** | The old joystick put four actions under one thumb. Left thumb aims and sets power; right thumb drives and fires. Drive is stacked *above* FIRE rather than beside it — a side-by-side row cost 58 px of battlefield width and put a fuel-burning action against the fire button. |
+| **Your gauge shows power, not shield** | The enemy bar answers "how much punishment is left"; yours answers "how hard am I about to hit" — the number you adjust every turn, which the HUD shows only as a thin bar in a five-cell row. Mirrored placement, identical markup, so one set of CSS rules scales both. |
+| **Fullscreen is two buttons, one handler** | The header is hidden by the landscape immersive layout, which is exactly where a phone most wants the browser chrome gone, so `#fullscreen-rail` sits at the top of `right1` — an existing row, no new area. Both are *removed* when `fullscreenEnabled` is false (iOS Safari) rather than shown dead, and rejections are swallowed so a missing user gesture cannot reach the frame loop. |
 
 ---
 

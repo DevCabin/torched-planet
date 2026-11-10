@@ -218,6 +218,11 @@ function updateHud() {
   byId('turn').textContent = 'LEVEL ' + String(level).padStart(2, '0') + ' · ROUND ' + String(round).padStart(2, '0');
   byId('multiplier').textContent = progression.reward(level).toFixed(1) + '× REWARDS';
   byId('power-tick').style.setProperty('--at', (lastPower === null ? 0 : clamp(lastPower, 0, 100)) + '%');
+  // The battlefield power gauge mirrors the HUD: fill is the live power, the red mark is the power
+  // of your last shot, so you can dial back to it without reading the number.
+  byId('power-gauge').textContent = String(Math.round(player.power));
+  byId('power-fill').style.setProperty('--level', clamp(player.power, 0, 100) + '%');
+  byId('power-mark').style.setProperty('--at', (lastPower === null ? 0 : clamp(lastPower, 0, 100)) + '%');
   // An empty shield is no longer the end of a tank's defence once hull points exist, so the
   // enemy readout names them explicitly rather than implying "empty bar = one hit kills".
   byId('enemy').textContent = !tanks[1].alive ? 'CPU / DOWN'
@@ -882,6 +887,41 @@ for (const button of document.querySelectorAll('[data-hold]')) {
     button.addEventListener(type, event => held.delete(event.pointerId));
   }
 }
+// Fullscreen. Two buttons, one handler: the header is hidden by the landscape immersive layout, and
+// that is exactly the layout where a phone most wants the browser chrome gone.
+const fullscreenButtons = [byId('fullscreen'), byId('fullscreen-rail')].filter(Boolean);
+const canFullscreen = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+
+function syncFullscreen() {
+  const active = !!document.fullscreenElement;
+  for (const button of fullscreenButtons) {
+    button.setAttribute('aria-pressed', String(active));
+    button.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
+  }
+}
+
+function toggleFullscreen() {
+  if (!canFullscreen) return;
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.().catch(() => {});
+    return;
+  }
+  const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+  // Swallow rejections and synchronous throws: a missing user gesture or an unsupported context must
+  // never reach the frame loop.
+  if (!request) return;
+  try { Promise.resolve(request.call(document.documentElement)).catch(() => {}); } catch { /* ignored */ }
+}
+
+if (canFullscreen) {
+  for (const button of fullscreenButtons) button.onclick = toggleFullscreen;
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  syncFullscreen();
+} else {
+  // No Fullscreen API (iOS Safari, for instance): drop the control rather than show a dead button.
+  for (const button of fullscreenButtons) button.remove();
+}
+
 byId('reset').onclick = reset;
 byId('deploy').onclick = deploy;
 byId('fire').onclick = () => { if (phase === 'aim') fire(selected); };

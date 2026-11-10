@@ -8,7 +8,7 @@ Working on the code? [`PROJECT.md`](PROJECT.md) is the single source of truth â€
 
 **https://torched-planet.vercel.app**
 
-A desktop keyboard and a touch screen both work; turn the phone sideways for the full-height battlefield.
+A desktop keyboard and a touch screen both work; turn the phone sideways for the full-height battlefield. The **â›¶** button (top right, or the top of the right rail in landscape) plays it full screen where the browser allows it.
 
 ## Run locally
 

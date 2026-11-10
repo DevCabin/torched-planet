@@ -10,7 +10,7 @@
 </head>
 <body>
 <main>
-<header><div><span class="eyebrow">FIELD SYSTEMS / ARTILLERY DUEL</span><h1>TORCHED <span>PLANET</span></h1></div><button id="reset" aria-label="New battlefield">↻ New<span class="wide"> battlefield</span></button></header>
+<header><div><span class="eyebrow">FIELD SYSTEMS / ARTILLERY DUEL</span><h1>TORCHED <span>PLANET</span></h1></div><div class="head-actions"><button id="fullscreen" class="fs" aria-label="Enter fullscreen" aria-pressed="false">⛶<span class="wide"> Full screen</span></button><button id="reset" aria-label="New battlefield">↻ New<span class="wide"> battlefield</span></button></div></header>
 <p class="rotate">↻ Rotate your device for a bigger battlefield</p>
 <section class="hud" aria-label="Tank instruments">
 <div><small>SHOT POWER</small><strong id="power"></strong><span class="meter-wrap"><meter id="power-meter" min="0" max="100"></meter><i id="power-tick"></i></span></div>
@@ -24,6 +24,11 @@
 <div class="board">
 <div class="stage">
 <canvas id="battle" width="1000" height="520" aria-label="Two tanks on destructible terrain"></canvas>
+<aside class="gauge mine" aria-label="Your shot power">
+<b id="power-gauge">63</b>
+<div class="gauge-track" aria-hidden="true"><i id="power-fill"></i><div class="mark" id="power-mark"></div></div>
+<small>PWR</small>
+</aside>
 <aside class="gauge" aria-label="Enemy shield strength and incoming damage">
 <b id="gauge-hp">0</b>
 <div class="gauge-track" aria-hidden="true"><i id="gauge-fill"></i><em id="gauge-threat"></em></div>
@@ -40,6 +45,7 @@
 </div>
 <div class="keys"><small>FIELD CONTROLS</small><span>← → or A D aim · ↑ ↓ or W S power</span><span>Shift fine aim · tap for 1% steps</span><span>Z X drive · Space fire</span></div>
 <label>LOADED WEAPON<select id="weapon"></select></label>
+<button id="fullscreen-rail" class="fs rail-only" aria-label="Enter fullscreen" aria-pressed="false">⛶</button>
 <button class="primary fire" id="fire">FIRE <span>↗</span></button>
 </section>
 </main>
