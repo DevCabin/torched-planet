@@ -13,6 +13,7 @@ All notable changes to this project are recorded here.
 
 ### Changed
 
+- **Large shells moved from Weapons to Utilities** ($35 each), balancing the depot to 5 / 5 / 2 instead of 6 / 5 / 1. Behaviour-preserving by construction: they are appended *after* the fuel can — `aimBot()` refuels by position (`catalog[2][1][0]`), so a shell at index 0 would have silently stopped the CPU refuelling — and the CPU's resupply search became `ammoFor()`, which spans Weapons and Utilities, keeps only real shells, and still prefers the biggest it can afford before falling back to the cheap one. Five harness checks now guard that contract.
 - `blast()`'s lethal branch now spends a hull point instead of destroying outright. A standard tank carries `1/1`, so behaviour at tier 1 is unchanged — the original harness assertions still mean what they said.
 - The gauge's "empty bar means one clean hit destroys the tank" promise is now qualified: the enemy readout appends `· HULL n` from level 9, and `README.md` says *standard* tank. The gauge itself is untouched — hull is a hull, not a shield.
 - `aimBot()`'s defensive purchase moved into `shieldFor(tank)`, a pure helper that filters `!item.armor` so the CPU can never buy a tier that `makeTank()` would wipe next duel.

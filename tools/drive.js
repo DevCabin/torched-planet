@@ -30,12 +30,25 @@
       check('enemy gauge mirrors shield HP', $('gauge-hp').textContent === String(tanks[1].hp), $('gauge-hp').textContent + ' vs ' + tanks[1].hp);
       check('every weapon has an ammo count', Object.keys(weapons).every(id => tanks[0].ammo[id] !== undefined),
         Object.keys(weapons).filter(id => tanks[0].ammo[id] === undefined).join(',') || 'all present');
-      check('new weapons are stocked', ['nukeMini', 'napalmXL', 'large'].every(id => catalog[0][1].some(item => item.id === id)),
+      check('new weapons are stocked', ['nukeMini', 'napalmXL'].every(id => catalog[0][1].some(item => item.id === id)),
         catalog[0][1].map(item => item.id).join(','));
+
+      // Large shells were moved to Utilities to balance the depot. Two contracts ride on that:
+      // the fuel can must stay at index 0 (aimBot refuels by position) and the CPU's resupply
+      // must still find the cheap shell and still prefer a big one.
+      check('Large shells are stocked under Utilities',
+        catalog[2][1].some(item => item.id === 'large') && !catalog[0][1].some(item => item.id === 'large'),
+        'utilities: ' + catalog[2][1].map(item => item.id).join(','));
+      check('the fuel can stays first in Utilities', catalog[2][1][0].id === 'fuel', catalog[2][1][0].id);
+      check('the depot sections are balanced', catalog.every(([, items]) => items.length >= 2),
+        catalog.map(([name, items]) => name + ':' + items.length).join(' '));
+      const wallet = cash => ({ cash, hp: 0, fuel: 100, armor: 1, armorMax: 1 });
+      check('the CPU reaches for a big shell first', (ammoFor(wallet(1e6)) || {}).id === 'nuke', (ammoFor(wallet(1e6)) || {}).id);
+      check('the CPU can still buy a cheap shell', (ammoFor(wallet(40)) || {}).id === 'large', (ammoFor(wallet(40)) || {}).id);
 
       // A Large shell must be restockable: the contract is a catalogue entry plus purchase()'s
       // ammo branch. Cash is borrowed and returned so the rest of the run is unaffected.
-      const restock = catalog[0][1].find(item => item.id === 'large');
+      const restock = catalog[2][1].find(item => item.id === 'large');
       const shellsBefore = tanks[0].ammo.large;
       tanks[0].cash = 500;
       const bought = !!restock && purchase(tanks[0], restock);

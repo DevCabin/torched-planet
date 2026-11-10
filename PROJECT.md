@@ -41,7 +41,7 @@ is the broken part.
 | --- | --- |
 | Repo | `github.com/DevCabin/torched-planet` (public), branch `main` |
 | Stack | vanilla JS + canvas. No dependencies, no build step, no assets |
-| Size | `game.js` 787 lines · `index.html` 54 · `style.css` 102 |
+| Size | `game.js` 798 lines · `index.html` 54 · `style.css` 102 |
 | Live URL | **https://torched-planet.vercel.app** — static deploy of the repo root; pushes to `main` redeploy automatically |
 | Play locally | `open index.html` — that is a complete dev environment |
 
@@ -444,7 +444,7 @@ for each tank:
 | id | radius | damage | Notes |
 | --- | --- | --- | --- |
 | `basic` | 13 | 1 | Unlimited |
-| `large` | 29 | 2 | 3 to start; **restockable for $35** |
+| `large` | 29 | 2 | 3 to start; **restockable for $35** under Utilities |
 | `nuke` | 107 | 5 | `lethalSplash` |
 | `nukeMini` | 52 | 3 | `lethalSplash` — half a Nuke's footprint |
 | `spread` | 16 | 1 | Fires five shells in a fan |
@@ -513,11 +513,17 @@ feel. The HUD shows the live multiplier (`updateHud()` writes `#multiplier`).
 The catalog DOM is built **once** at load from `catalog`; `updateShop()` keeps the displayed
 prices in sync each level. Add an item to the data and it appears automatically.
 
-**Catalogue order is load-bearing.** `aimBot()` buys
-`catalog[0][1].find(item => canBuy(bot, item))` — the *first affordable* weapons item — so a
-cheap resupply must sit **last**, or the CPU will stop reaching for Nuke/Spread/Napalm. The
-category indices are positional too (`catalog[1][1]` shields, `catalog[2][1][0]` fuel):
+**Catalogue order is load-bearing.** `aimBot()` buys ammunition through `ammoFor()`, which scans
+`catalog[0][1]` and then `catalog[2][1]`, keeps only real shells, and takes the *first affordable*
+one — so a cheap resupply must sit **last**, or the CPU will stop reaching for Nuke/Spread/Napalm.
+The category indices are positional too (`catalog[1][1]` shields, `catalog[2][1][0]` fuel):
 **append items within a section, never insert a new category.**
+
+**Large shells are stocked under Utilities** ($35, +1 shell), appended *after* the fuel can. That
+balances the depot (5 / 5 / 2 instead of 6 / 5 / 1) and, more to the point, leaves
+`catalog[2][1][0]` pointing at fuel — prepend a shell there and the CPU quietly stops refuelling
+when its tank runs dry. `ammoFor()` spans both sections precisely so the move costs the CPU
+nothing: it still reaches for the best shell it can afford and falls back to the cheap one.
 
 The **Tank II / Tank III** hull upgrades live at the end of `Defense`, behind the shields. They are
 the exception that proves the rule: `shieldFor(tank)` exists purely so the CPU's reversed search
@@ -798,6 +804,10 @@ empty and `updateWeapons()` silently marks it disabled.
 Add it to the right `catalog` section; `updateShop()` and the DOM pick it up automatically.
 `purchase()` handles exactly four kinds: `hp` items, `armor` tiers, `id === 'fuel'`, and everything
 else as ammo. A new *kind* of item needs a branch in `purchase()` **and** a rule in `canBuy()`.
+
+Ammunition may sit in Weapons or Utilities — `ammoFor()` scans both, so the CPU can restock it —
+but respect the position rules in §11: append within a section, and never displace `fuel` from
+`catalog[2][1][0]`.
 
 **Armour tiers are doubly special:** `canBuy()` enforces the ladder (`armorMax === item.armor - 1`),
 `purchase()` also recolours the tank, and `shieldFor()` must keep excluding them from the CPU's

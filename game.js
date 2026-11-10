@@ -37,8 +37,7 @@ const catalog = [
     { id: 'spread', name: '5 Spread', price: 85, detail: 'Five shells in a fan' },
     { id: 'napalm', name: 'Napalm', price: 105, detail: 'Impact lights nearby ground' },
     { id: 'nukeMini', name: 'Nuke Mini', price: 95, detail: 'Tight blast · up to 3 shield damage' },
-    { id: 'napalmXL', name: 'Napalm XL', price: 175, detail: 'Wide fire field · 9 burning pools' },
-    { id: 'large', name: 'Large shell', price: 35, detail: '+1 shell · 2 damage' }
+    { id: 'napalmXL', name: 'Napalm XL', price: 175, detail: 'Wide fire field · 9 burning pools' }
   ]],
   ['Defense', [
     { id: 'weak', name: 'Weak shield', price: 50, hp: 1, detail: '1 HP' },
@@ -49,7 +48,12 @@ const catalog = [
     { id: 'tank2', name: 'Tank II', price: 2000, armor: 2, detail: '2 hull hits · amber chassis' },
     { id: 'tank3', name: 'Tank III', price: 5000, armor: 3, detail: '3 hull hits · violet chassis' }
   ]],
-  ['Utilities', [{ id: 'fuel', name: 'Fuel can', price: 35, detail: '+45 fuel · max 100' }]]
+  ['Utilities', [
+    { id: 'fuel', name: 'Fuel can', price: 35, detail: '+45 fuel · max 100' },
+    // Ammunition belongs here too, and it must be appended: aimBot() refuels by position
+    // (`catalog[2][1][0]`), so a shell at index 0 would silently stop the CPU refuelling.
+    { id: 'large', name: 'Large shells', price: 35, detail: '+1 shell · 2 damage' }
+  ]]
 ];
 // Endless progression: `level` counts duels (advances when a tank is destroyed),
 // `round` counts turn cycles within the current duel. All scaling uses `level`.
@@ -202,6 +206,13 @@ function purchase(tank, item) {
 // The CPU's defence shopping is shields only. Armour tiers are earned from `progression.cpuArmor`
 // instead — buying them would burn its wallet on a tier that makeTank() wipes next duel.
 const shieldFor = tank => catalog[1][1].slice().reverse().find(item => !item.armor && canBuy(tank, item));
+
+// Ammunition can be stocked in Weapons or Utilities, so the CPU's resupply scans both and keeps
+// only real shells (fuel and shields have no `weapons` entry). Weapons come first, which leaves the
+// cheap Large resupply last — exactly the ordering aimBot() was tuned against.
+const ammoFor = tank => [...catalog[0][1], ...catalog[2][1]]
+  .filter(item => weapons[item.id])
+  .find(item => canBuy(tank, item));
 
 function updateShop() {
   byId('shop-cash').textContent = '$' + tanks[0].cash;
@@ -484,7 +495,7 @@ function aimBot() {
   if (defense) purchase(bot, defense);
   if (bot.fuel < 30) purchase(bot, catalog[2][1][0]);
   if (!bot.ammo.large && !bot.ammo.nuke) {
-    const special = catalog[0][1].find(item => canBuy(bot, item));
+    const special = ammoFor(bot);
     if (special) purchase(bot, special);
   }
   const id = level < 3 ? 'basic' : ['nuke', 'large', 'napalm', 'nukeMini', 'napalmXL', 'spread', 'basic'].find(key => bot.ammo[key]);
