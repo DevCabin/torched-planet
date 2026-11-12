@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+<title>Torched Planet</title>
+<!-- A 16 × 16 sprite: one unit is one art pixel, so every edge lands on the grid and the icon stays
+     hard-edged at 16, 32 and 180 px. The colours are the game's own — the Salt Flats sky bands, the
+     #c8cdb2 terrain rim, the Tank I lime chassis, and the tread/wheel greys from drawTank(). The
+     barrel is a 1 px stair rather than a rotated rect, which is exactly what the PIXEL raster does
+     to a 45° line on the canvas. -->
+<rect width="16" height="4" fill="#080d18"/>
+<rect y="4" width="16" height="4" fill="#101a2e"/>
+<rect y="8" width="16" height="4" fill="#1b2a45"/>
+<rect x="2" y="2" width="1" height="1" fill="#dfe9ff" opacity=".6"/>
+<rect x="6" y="1" width="1" height="1" fill="#dfe9ff" opacity=".35"/>
+<rect y="12" width="16" height="1" fill="#c8cdb2"/>
+<rect y="13" width="16" height="1" fill="#4d5a63"/>
+<rect y="14" width="16" height="2" fill="#2b3540"/>
+<rect x="10" y="4" width="1" height="2" fill="#d5fa71"/>
+<rect x="11" y="3" width="1" height="2" fill="#d5fa71"/>
+<rect x="12" y="2" width="1" height="2" fill="#d5fa71"/>
+<rect x="13" y="1" width="1" height="2" fill="#d5fa71"/>
+<rect x="14" y="1" width="1" height="2" fill="#d5fa71"/>
+<rect x="6" y="6" width="5" height="2" fill="#d5fa71"/>
+<rect x="3" y="8" width="10" height="2" fill="#d5fa71"/>
+<rect x="2" y="10" width="12" height="2" fill="#141e22"/>
+<rect x="3" y="10" width="2" height="1" fill="#80908a"/>
+<rect x="7" y="10" width="2" height="1" fill="#80908a"/>
+<rect x="11" y="10" width="2" height="1" fill="#80908a"/>
+</svg>

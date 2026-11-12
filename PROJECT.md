@@ -40,8 +40,8 @@ is the broken part.
 | | |
 | --- | --- |
 | Repo | `github.com/DevCabin/torched-planet` (public), branch `main` |
-| Stack | vanilla JS + canvas. No dependencies, no build step, no assets |
-| Size | `game.js` 943 lines · `index.html` 60 · `style.css` 112 |
+| Stack | vanilla JS + canvas. No dependencies, no build step, no binary assets — the one icon is hand-authored SVG (§14) |
+| Size | `game.js` 943 lines · `index.html` 61 · `style.css` 112 · `favicon.svg` 27 |
 | Live URL | **https://torched-planet.vercel.app** — static deploy of the repo root; pushes to `main` redeploy automatically |
 | Play locally | `open index.html` — that is a complete dev environment |
 
@@ -92,7 +92,7 @@ Where each went:
 | `PLAN-weapons.md` | §10 weapon table, §11 catalogue ordering, §17 recipes |
 
 The repo root now holds exactly: `README.md`, `PROJECT.md`, `CHANGELOG.md`,
-`cline_instructions.md`, `index.html`, `style.css`, `game.js`, `vercel.json`, plus
+`cline_instructions.md`, `index.html`, `style.css`, `game.js`, `favicon.svg`, `vercel.json`, plus
 `tools/` and `.gitignore`. Git history keeps the old files if you ever want them back — and a
 new multi-step task still gets a fresh `PLAN-*.md` before implementation (rule 2). Retire it once
 its decisions are folded into this document and the `CHANGELOG`.
@@ -148,6 +148,7 @@ concurrently, and the push races the commit with *"src refspec main does not mat
 index.html     → the DOM: canvas, HUD, controls, shop dialog, enemy gauge
 style.css      → theme tokens, HUD grid, responsive breakpoints
 game.js        → all state, physics, rules and rendering (one file)
+favicon.svg    → the tab icon: a 16 × 16 sprite in the game's own palette (§14)
 tools/drive.js → headless smoke test driver (§2)
 ```
 
@@ -160,6 +161,7 @@ bundler, no module system, no TypeScript. Everything lives at module scope
 | `index.html` | DOM structure and the **element-ID contract** (§15) |
 | `style.css` | Theme, HUD layout, touch breakpoints. One rule per line, deliberately compact |
 | `game.js` | State, terrain, physics, rules, CPU, rendering, input — the entire game |
+| `favicon.svg` | The tab icon — a 16 × 16 pixel sprite, SVG text rather than a binary (§14) |
 | `tools/drive.js` | Headless driver, loaded by a generated `harness.html` |
 | `vercel.json` | Static host config: no build, output is the repo root |
 | `README.md` | Player-facing: controls, rules, how to run |
@@ -691,6 +693,37 @@ the grid came in. `PIXEL * 2` (4 logical px) is the safe default for a visible d
 coordinates** → `ctx.restore()`. Inside that transform the tank sits at the origin, so all the hull,
 wheel and pip maths are local numbers.
 
+### The favicon
+
+`favicon.svg` is the tab icon: a **16 × 16 art-pixel sprite** where one SVG unit is one art pixel, so
+every edge lands on the grid. `shape-rendering="crispEdges"` keeps it hard-edged at 16, 32 and 180 px
+instead of antialiasing into mush. It is hand-authored text, not a binary, which is how it survives the
+no-assets rule — there is nothing to regenerate, and no build step to forget.
+
+It is the canvas art at icon scale: the Salt Flats sky bands (`#080d18` / `#101a2e` / `#1b2a45`), the
+`#c8cdb2` terrain rim, `#141e22` treads with `#80908a` wheel marks, and the Tank I lime `#d5fa71` hull —
+so the tab and the battlefield are the same world. Two things were learned redrawing it:
+
+- **The barrel is a 1 px stair, not a rotated rect.** `rotate(-45)` gives a soft diagonal wedge; the
+  stair is both sharp and exactly what the `PIXEL` raster does to a 45° line on the canvas (§14).
+- **A 2 px stair is too fat.** At 16 px a 2-wide barrel merges with the turret into one triangular
+  blob. The 1 px stair plus a 2 px muzzle brake is the version that reads as a gun at 16 px, which is
+  the only size that matters.
+
+Preview it at real size before committing, then look at the PNG — an icon that is legible at 180 px can
+be a dot at 16:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu \
+  --window-size=16,16 --force-device-scale-factor=1 --screenshot=/tmp/fav16.png \
+  "file:///Users/george/GITHUB/torched-planet/favicon.svg"
+open /tmp/fav16.png
+```
+
+**No PNG or `.ico` fallback ships, deliberately.** Modern Chrome, Edge, Firefox and Safari 17+ all take
+`type="image/svg+xml"`; a browser that does not simply shows no icon rather than a 404, because there is
+no `favicon.ico` for it to fall back to.
+
 ### The space backdrop
 
 `makeMap()` rolls the sky once per battlefield, alongside the terrain, and **never again during a
@@ -828,7 +861,8 @@ control, and a **44 px minimum tap target**.
 ## 16. House rules
 
 - 2-space indent, semicolons, single quotes, `'use strict'` at the top.
-- No dependencies, no build step, no assets. Keep it openable with a double-click.
+- No dependencies, no build step, no binary assets. Keep it openable with a double-click. (The one
+  image, `favicon.svg`, is text you can edit in the same editor — see §14.)
 - State lives in module-scope `let`; helpers are hoisted `function` declarations.
 - Small pure helpers are arrows: `const clamp = (v, min, max) => …`, `const byId = id => …`.
 - Functions are verbs (`fire`, `settleTank`); data is nouns (`terrain`, `shells`).
@@ -951,6 +985,8 @@ These were argued over. Don't undo them casually; each row carries the *why*.
 | **Split thumbs: aim/power left, drive right** | The old joystick put four actions under one thumb. Left thumb aims and sets power; right thumb drives and fires. Drive is stacked *above* FIRE rather than beside it — a side-by-side row cost 58 px of battlefield width and put a fuel-burning action against the fire button. |
 | **Your gauge shows power, not shield** | The enemy bar answers "how much punishment is left"; yours answers "how hard am I about to hit" — the number you adjust every turn, which the HUD shows only as a thin bar in a five-cell row. Mirrored placement, identical markup, so one set of CSS rules scales both. |
 | **Fullscreen is two buttons, one handler** | The header is hidden by the landscape immersive layout, which is exactly where a phone most wants the browser chrome gone, so `#fullscreen-rail` sits at the top of `right1` — an existing row, no new area. Both are *removed* when `fullscreenEnabled` is false (iOS Safari) rather than shown dead, and rejections are swallowed so a missing user gesture cannot reach the frame loop. |
+| **The favicon is SVG text, not a PNG/ICO pair** | A binary icon would break "no assets, no build step" and have to be regenerated on every art change. A 16 × 16 SVG (`favicon.svg`) is hand-editable, crisp at any size under `crispEdges`, and served as `image/svg+xml`. Browsers without SVG-favicon support show no icon — a smaller cost than a committed binary, and with no `favicon.ico` on disk they 404 nothing. |
+| **The favicon barrel is a 1 px stair with a muzzle brake** | A rotated rect antialiases into a soft wedge, and a 2 px stair is fat enough at 16 px to merge with the turret into one triangle. The 1 px stair is sharp *and* is what the `PIXEL` raster does to a 45° line on the canvas, so icon and battlefield agree. |
 
 ---
 
